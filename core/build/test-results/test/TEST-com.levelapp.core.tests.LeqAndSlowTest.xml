@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.levelapp.core.tests.LeqAndSlowTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-28T03:26:14" hostname="Mac.lan" time="0.0">
+  <properties/>
+  <testcase name="slow integrator keeps sensitivity in a stable range()" classname="com.levelapp.core.tests.LeqAndSlowTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

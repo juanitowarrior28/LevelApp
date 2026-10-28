@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.levelapp.core.tests.CalibrationAndRmsTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-28T03:26:14" hostname="Mac.lan" time="0.01">
+  <properties/>
+  <testcase name="gain calibration adjusts level predictably()" classname="com.levelapp.core.tests.CalibrationAndRmsTest" time="0.009"/>
+  <testcase name="rms of 1 0 1 is sqrt of mean square()" classname="com.levelapp.core.tests.CalibrationAndRmsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

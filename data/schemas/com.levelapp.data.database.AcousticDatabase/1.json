@@ -1,0 +1,174 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "bfa1ef0cbc8d7fbf79900cdfeb1aee38",
+    "entities": [
+      {
+        "tableName": "sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `workerName` TEXT NOT NULL, `evaluatorName` TEXT NOT NULL, `profileId` TEXT NOT NULL, `status` TEXT NOT NULL, `startedAtEpochMs` INTEGER NOT NULL, `endedAtEpochMs` INTEGER, `laeq` REAL NOT NULL, `lasMax` REAL NOT NULL, `twa` REAL NOT NULL, `dosePercent` REAL NOT NULL, `notes` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workerName",
+            "columnName": "workerName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evaluatorName",
+            "columnName": "evaluatorName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profileId",
+            "columnName": "profileId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMs",
+            "columnName": "startedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAtEpochMs",
+            "columnName": "endedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "laeq",
+            "columnName": "laeq",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lasMax",
+            "columnName": "lasMax",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "twa",
+            "columnName": "twa",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dosePercent",
+            "columnName": "dosePercent",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "measurement_points",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `session_id` INTEGER NOT NULL, `timestampEpochMs` INTEGER NOT NULL, `dbA` REAL NOT NULL, `laeq` REAL NOT NULL, `lasMax` REAL NOT NULL, `twa` REAL NOT NULL, `dosePercent` REAL NOT NULL, `durationSeconds` REAL NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestampEpochMs",
+            "columnName": "timestampEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dbA",
+            "columnName": "dbA",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "laeq",
+            "columnName": "laeq",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lasMax",
+            "columnName": "lasMax",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "twa",
+            "columnName": "twa",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dosePercent",
+            "columnName": "dosePercent",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationSeconds",
+            "columnName": "durationSeconds",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bfa1ef0cbc8d7fbf79900cdfeb1aee38')"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.levelapp.core.tests.NioshDoseCalculatorTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-28T03:26:14" hostname="Mac.lan" time="0.002">
+  <properties/>
+  <testcase name="twa equals criterion for 100 percent dose()" classname="com.levelapp.core.tests.NioshDoseCalculatorTest" time="0.001"/>
+  <testcase name="niosh 85 dba for 8 hours equals 100 percent dose()" classname="com.levelapp.core.tests.NioshDoseCalculatorTest" time="0.0"/>
+  <testcase name="niosh 88 dba for 4 hours equals 100 percent dose()" classname="com.levelapp.core.tests.NioshDoseCalculatorTest" time="0.0"/>
+  <testcase name="niosh 91 dba for 2 hours equals 100 percent dose()" classname="com.levelapp.core.tests.NioshDoseCalculatorTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

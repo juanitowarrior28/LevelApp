@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LevelApp Web Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="phone-frame">
+      <div class="speaker"></div>
+      <div class="app-shell">
+        <header class="topbar">
+          <div class="brand-block">
+            <div class="app-icon">L</div>
+            <div>
+              <small class="eyebrow">Dosimetría</small>
+              <h1>LevelApp</h1>
+            </div>
+          </div>
+          <div class="status-pill" id="calibrationState">NO CALIBRADO</div>
+        </header>
+
+        <section class="hero card">
+          <div class="hero-main">
+            <div class="metric-row">
+              <span class="label">dB(A)</span>
+              <span class="unit">equivalente</span>
+            </div>
+            <div class="value-wrap">
+              <span class="value" id="liveDbA">--</span>
+              <span class="value-suffix">dB</span>
+            </div>
+            <div class="meter">
+              <div class="meter-fill" id="meterFill"></div>
+            </div>
+            <div class="secondary-grid">
+              <div class="metric-tile">
+                <span class="label">LAeq</span>
+                <strong id="laeqValue">--</strong>
+              </div>
+              <div class="metric-tile">
+                <span class="label">LASmax</span>
+                <strong id="lasMaxValue">--</strong>
+              </div>
+              <div class="metric-tile">
+                <span class="label">TWA</span>
+                <strong id="twaValue">--</strong>
+              </div>
+              <div class="metric-tile">
+                <span class="label">Dosis</span>
+                <strong id="doseValue">--</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-panel">
+            <div><span class="label">Perfil</span><strong id="profileName">NIOSH REL</strong></div>
+            <div><span class="label">Duración</span><strong id="durationValue">00:00</strong></div>
+            <div><span class="label">Estado</span><strong id="stateValue">En espera</strong></div>
+            <div><span class="label">Micrófono</span><strong id="micState">Sin acceso</strong></div>
+          </div>
+        </section>
+
+        <section class="controls card">
+          <div class="button-row">
+            <button id="startBtn" class="primary">Iniciar</button>
+            <button id="pauseBtn" class="secondary">Pausar</button>
+            <button id="stopBtn" class="ghost">Finalizar</button>
+          </div>
+
+          <label class="field-label" for="notes">Notas</label>
+          <textarea id="notes" rows="3" placeholder="Añade observaciones de la tarea, trabajador o entorno..."></textarea>
+        </section>
+
+        <section class="chart-card card">
+          <div class="chart-header">
+            <h2>Historial temporal</h2>
+            <span>NIOSH REL — 85 dBA / 8 h</span>
+          </div>
+          <canvas id="historyChart" width="900" height="250"></canvas>
+        </section>
+
+        <section class="history card">
+          <div class="history-header">
+            <h2>Historial</h2>
+            <div class="actions">
+              <button id="exportPdfBtn" class="secondary small">Guardar PDF</button>
+              <button id="shareBtn" class="ghost small">Compartir</button>
+            </div>
+          </div>
+          <ul id="sessionList"></ul>
+        </section>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
