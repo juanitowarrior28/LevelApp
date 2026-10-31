@@ -5,13 +5,13 @@ Aplicación Android modular para dosimetría acústica ocupacional con arquitect
 ## Fases implementadas
 
 1. Arquitectura modular y separación de capas.
-2. Captura de audio en tiempo real con permisos y servicio foreground.
-3. Motor DSP base: RMS, SPL digital, ponderación A y integrador Slow.
-4. Calibración y estado de validación metrológica.
-5. Dosimetría NIOSH con dosis y TWA separados del núcleo acústico.
-6. Persistencia local con Room para historial y puntos agregados.
-7. UI moderna con Jetpack Compose y estados en tiempo real.
-8. Exportación local PDF y preparación para Share Sheet.
+2. Captura de audio en tiempo real con permisos y servicio foreground (Filtro DSP A-Weighting integrado).
+3. Motor DSP: Filtro IIR Ponderación A, cálculo de dosis acumulada (NIOSH y OSHA).
+4. Interfaz adaptativa Dark Mode con `Jetpack Compose` (Curvas de nivel e Historial).
+5. Sistema de Onboarding guiado mediante Canvas/BlendMode.Clear (Spotlight Tutorial).
+6. Persistencia local con Room (Historial de mediciones seguro).
+7. Exportación versátil de reportes: CSV y PDF.
+8. Configuración dinámica de Calibración de Offset.
 
 ## Módulos
 
