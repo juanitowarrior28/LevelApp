@@ -4,7 +4,7 @@
             "outputFile": "com.levelapp.app-mergeDebugResources-66:/values-v30/values-v30.xml",
             "map": [
                 {
-                    "source": "/Users/warriorjuanjgg/.gradle/caches/transforms-4/2d559a382afad72ab98bb1a30d5d6374/transformed/material3-release/res/values-v30/values-v30.xml",
+                    "source": "C:\\Users\\USER\\.gradle\\caches\\transforms-4\\036d5b880fe4bc0bc113e3b5426f9a11\\transformed\\material3-release\\res\\values-v30\\values-v30.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

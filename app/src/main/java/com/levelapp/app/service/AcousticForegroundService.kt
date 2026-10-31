@@ -41,6 +41,7 @@ class AcousticForegroundService : Service() {
         return START_STICKY
     }
 
+    @SuppressWarnings("MissingPermission")
     private fun startRecording() {
         val sampleRate = 48000
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
@@ -68,10 +69,50 @@ class AcousticForegroundService : Service() {
 
         captureJob = serviceScope.launch {
             val localBuffer = ShortArray(bufferSize)
+
+            // Variables del Filtro de Ponderación A (IIR Direct Form II) extraídas del repositorio original (AudioMeter.kt)
+            var z1 = 0.0
+            var z2 = 0.0
+            val b0 = 0.16999495
+            val b1 = 0.28039060
+            val b2 = -0.11204747
+            val a1 = -2.12979410
+            val a2 = 0.42996125
+
             while (running && recorder?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                 val read = recorder?.read(localBuffer, 0, localBuffer.size) ?: 0
                 if (read > 0) {
-                    // Se guarda solo agregados; se evita persistir audio crudo en este servicio.
+                    var sumSquare = 0.0
+
+                    for (i in 0 until read) {
+                        val x = localBuffer[i].toDouble()
+
+                        // Aplicación del filtro de ponderación A (Direct Form II)
+                        val out = b0 * x + z1
+                        z1 = b1 * x - a1 * out + z2
+                        z2 = b2 * x - a2 * out
+                        
+                        // Si el filtro produce un error matemático, usamos el valor original
+                        val finalSample = if (out.isNaN() || out.isInfinite()) x else out
+                        sumSquare += finalSample * finalSample
+                    }
+
+                    // Cálculo del RMS (Raíz Cuadrática Media)
+                    val rms = Math.sqrt(sumSquare / read)
+                    val normalizedRMS = rms / 32768.0 // Normalización a escala 16-bit
+                    
+                    // Conversión a decibelios (dB) con referencia de 100 dB SPL (de AudioMeter.kt)
+                    val db = if (normalizedRMS > 1e-10) {
+                        20.0 * Math.log10(normalizedRMS) + 100.0
+                    } else {
+                        35.0
+                    }
+
+                    // Calibration offset (por ahora fijo, luego lo pasaremos del ViewModel)
+                    val calibrationOffset = 0.0
+                    val finalDb = (db + calibrationOffset).coerceIn(35.0, 110.0)
+                    
+                    AudioDataStream.emitDb(finalDb)
                 }
             }
         }

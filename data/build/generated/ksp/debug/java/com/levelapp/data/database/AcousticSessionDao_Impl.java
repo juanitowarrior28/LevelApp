@@ -6,6 +6,7 @@ import androidx.room.CoroutinesRoom;
 import androidx.room.EntityInsertionAdapter;
 import androidx.room.RoomDatabase;
 import androidx.room.RoomSQLiteQuery;
+import androidx.room.SharedSQLiteStatement;
 import androidx.room.util.CursorUtil;
 import androidx.room.util.DBUtil;
 import androidx.sqlite.db.SupportSQLiteStatement;
@@ -21,6 +22,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 import javax.annotation.processing.Generated;
+import kotlin.Unit;
 import kotlin.coroutines.Continuation;
 import kotlinx.coroutines.flow.Flow;
 
@@ -32,6 +34,12 @@ public final class AcousticSessionDao_Impl implements AcousticSessionDao {
   private final EntityInsertionAdapter<SessionEntity> __insertionAdapterOfSessionEntity;
 
   private final EntityInsertionAdapter<MeasurementPointEntity> __insertionAdapterOfMeasurementPointEntity;
+
+  private final SharedSQLiteStatement __preparedStmtOfDeleteSession;
+
+  private final SharedSQLiteStatement __preparedStmtOfDeleteAllSessions;
+
+  private final SharedSQLiteStatement __preparedStmtOfRenameSession;
 
   public AcousticSessionDao_Impl(@NonNull final RoomDatabase __db) {
     this.__db = __db;
@@ -85,6 +93,30 @@ public final class AcousticSessionDao_Impl implements AcousticSessionDao {
         statement.bindDouble(9, entity.getDurationSeconds());
       }
     };
+    this.__preparedStmtOfDeleteSession = new SharedSQLiteStatement(__db) {
+      @Override
+      @NonNull
+      public String createQuery() {
+        final String _query = "DELETE FROM sessions WHERE id = ?";
+        return _query;
+      }
+    };
+    this.__preparedStmtOfDeleteAllSessions = new SharedSQLiteStatement(__db) {
+      @Override
+      @NonNull
+      public String createQuery() {
+        final String _query = "DELETE FROM sessions";
+        return _query;
+      }
+    };
+    this.__preparedStmtOfRenameSession = new SharedSQLiteStatement(__db) {
+      @Override
+      @NonNull
+      public String createQuery() {
+        final String _query = "UPDATE sessions SET title = ? WHERE id = ?";
+        return _query;
+      }
+    };
   }
 
   @Override
@@ -120,6 +152,82 @@ public final class AcousticSessionDao_Impl implements AcousticSessionDao {
           return _result;
         } finally {
           __db.endTransaction();
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object deleteSession(final long sessionId, final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        final SupportSQLiteStatement _stmt = __preparedStmtOfDeleteSession.acquire();
+        int _argIndex = 1;
+        _stmt.bindLong(_argIndex, sessionId);
+        try {
+          __db.beginTransaction();
+          try {
+            _stmt.executeUpdateDelete();
+            __db.setTransactionSuccessful();
+            return Unit.INSTANCE;
+          } finally {
+            __db.endTransaction();
+          }
+        } finally {
+          __preparedStmtOfDeleteSession.release(_stmt);
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object deleteAllSessions(final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        final SupportSQLiteStatement _stmt = __preparedStmtOfDeleteAllSessions.acquire();
+        try {
+          __db.beginTransaction();
+          try {
+            _stmt.executeUpdateDelete();
+            __db.setTransactionSuccessful();
+            return Unit.INSTANCE;
+          } finally {
+            __db.endTransaction();
+          }
+        } finally {
+          __preparedStmtOfDeleteAllSessions.release(_stmt);
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object renameSession(final long sessionId, final String newTitle,
+      final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        final SupportSQLiteStatement _stmt = __preparedStmtOfRenameSession.acquire();
+        int _argIndex = 1;
+        _stmt.bindString(_argIndex, newTitle);
+        _argIndex = 2;
+        _stmt.bindLong(_argIndex, sessionId);
+        try {
+          __db.beginTransaction();
+          try {
+            _stmt.executeUpdateDelete();
+            __db.setTransactionSuccessful();
+            return Unit.INSTANCE;
+          } finally {
+            __db.endTransaction();
+          }
+        } finally {
+          __preparedStmtOfRenameSession.release(_stmt);
         }
       }
     }, $completion);

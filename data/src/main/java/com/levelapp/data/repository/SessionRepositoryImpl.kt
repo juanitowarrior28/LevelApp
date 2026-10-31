@@ -12,4 +12,7 @@ class SessionRepositoryImpl(
     suspend fun saveMeasurement(point: MeasurementPointEntity): Long = dao.insertMeasurementPoint(point)
     fun observeSessions(): Flow<List<SessionEntity>> = dao.observeSessions()
     fun observeMeasurementPoints(sessionId: Long): Flow<List<MeasurementPointEntity>> = dao.observeMeasurementPoints(sessionId)
+    suspend fun deleteSession(sessionId: Long) = dao.deleteSession(sessionId)
+    suspend fun deleteAllSessions() = dao.deleteAllSessions()
+    suspend fun renameSession(sessionId: Long, newTitle: String) = dao.renameSession(sessionId, newTitle)
 }
