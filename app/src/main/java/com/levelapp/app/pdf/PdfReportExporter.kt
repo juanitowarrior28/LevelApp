@@ -22,9 +22,13 @@ class PdfReportExporter(private val context: Context) {
         canvas.drawText("Nota: Documento generado localmente. No sustituye validación metrológica.", 60f, 210f, paint)
         pdfDocument.finishPage(page)
 
-        val outputDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "levelapp")
-        outputDir.mkdirs()
-        val outputFile = File(outputDir, "session_$sessionId.pdf")
+        val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val levelAppDir = File(outputDir, "LevelApp_Exportaciones")
+        levelAppDir.mkdirs()
+        
+        val safeTitle = title.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val outputFile = File(levelAppDir, "$safeTitle.pdf")
+        
         FileOutputStream(outputFile).use { stream ->
             pdfDocument.writeTo(stream)
         }

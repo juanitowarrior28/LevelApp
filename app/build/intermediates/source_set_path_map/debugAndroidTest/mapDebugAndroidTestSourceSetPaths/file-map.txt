@@ -1,0 +1,4 @@
+com.levelapp.app.test.app-androidTest-0 C:\Users\USER\LevelApp\app\build\generated\res\resValues\androidTest\debug
+com.levelapp.app.test.app-mergeDebugAndroidTestResources-1 C:\Users\USER\LevelApp\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\merged.dir
+com.levelapp.app.test.app-mergeDebugAndroidTestResources-2 C:\Users\USER\LevelApp\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\stripped.dir
+com.levelapp.app.test.app-debugAndroidTest-3 C:\Users\USER\LevelApp\app\build\intermediates\merged_res\debugAndroidTest\mergeDebugAndroidTestResources

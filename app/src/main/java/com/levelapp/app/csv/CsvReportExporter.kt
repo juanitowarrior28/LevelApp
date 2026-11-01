@@ -8,11 +8,12 @@ import java.io.FileWriter
 
 class CsvReportExporter(private val context: Context) {
     fun generateSessionCsv(session: SessionEntity): File {
-        val outputDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "levelapp_csv")
-        outputDir.mkdirs()
+        val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val levelAppDir = File(outputDir, "LevelApp_Exportaciones")
+        levelAppDir.mkdirs()
         
-        val safeTitle = session.title.replace(Regex("[^a-zA-Z0-9_]"), "_")
-        val outputFile = File(outputDir, "session_${session.id}_${safeTitle}.csv")
+        val safeTitle = session.title.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val outputFile = File(levelAppDir, "$safeTitle.csv")
         
         FileWriter(outputFile).use { writer ->
             writer.append("ID,Titulo,Trabajador,Evaluador,Perfil,Status,Inicio(ms),Fin(ms),LAeq,LASmax,TWA,Dosis(%)\n")
