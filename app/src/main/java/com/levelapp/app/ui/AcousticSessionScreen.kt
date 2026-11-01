@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import com.levelapp.app.utils.ShareUtils
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -153,6 +154,7 @@ fun AcousticSessionScreen(
     }
 
     val isRunning = uiState.status == "Running"
+    val isStopped = uiState.status == "Stopped"
 
     // Vibration Trigger
     LaunchedEffect(uiState.dose) {
@@ -172,7 +174,7 @@ fun AcousticSessionScreen(
     if (showStopDialog) {
         AlertDialog(
             onDismissRequest = { showStopDialog = false },
-            title = { Text("Detener y Guardar", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            title = { Text("Guardar sesión como", color = TextPrimary, fontWeight = FontWeight.Bold) },
             text = { 
                 Column {
                     Text("La medición se guardará con una dosis de ${"%.2f".format(uiState.dose)}%.", color = TextSecondary)
@@ -284,9 +286,18 @@ fun AcousticSessionScreen(
                             sessionId = uiState.savedSessionId.toString(),
                             title = "Reporte de Dosimetría"
                         )
-                        Toast.makeText(context, "PDF guardado en: ${file.name}", Toast.LENGTH_LONG).show()
+                        ShareUtils.shareFile(context, file, "application/pdf")
                     }) {
-                        Text("Exportar Reporte PDF", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Compartir Reporte PDF", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                } else if (isStopped) {
+                    Button(
+                        modifier = Modifier.fillMaxWidth().height(56.dp).onGloballyPositioned { targetRects[6] = it.boundsInRoot() },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PeriwinkleLight),
+                        onClick = { showStopDialog = true }
+                    ) {
+                        Text("Guardar sesión como", color = PeriwinklePrimary, fontWeight = FontWeight.Bold)
                     }
                 } else {
                     Box(Modifier.onGloballyPositioned { targetRects[6] = it.boundsInRoot() }) {
@@ -294,7 +305,8 @@ fun AcousticSessionScreen(
                             isRunning = isRunning,
                             onMainClick = {
                                 if (isRunning) {
-                                    showStopDialog = true
+                                    viewModel.stopRecording()
+                                    onStopService()
                                 } else {
                                     viewModel.startSession()
                                     onStartService()
@@ -387,9 +399,9 @@ fun AcousticSessionScreen(
                                     1 -> "Mide el Nivel de Presión Sonora en dB(A) simulando la respuesta del oído humano. Se pondrá naranja o rojo si la intensidad del ruido alcanza niveles perjudiciales para la salud."
                                     2 -> "Porcentaje de ruido seguro de tu día que ya has consumido. ¡Vibrará al llegar al 100%!"
                                     3 -> "Este botón te permite cambiar la normativa de exposición al ruido. Sugerimos usar NIOSH (más estricto, límite 85dB) para mayor prevención, u OSHA si tu industria requiere dicho estándar legal (límite 90dB)."
-                                    4 -> "Aquí encontrarás tus sesiones pasadas. Tu historial dura para siempre guardado localmente (solo se borra si desinstalas la app). Podrás renombrar o exportar tus sesiones."
+                                    4 -> "Aquí encontrarás tus sesiones pasadas. Tu historial dura para siempre guardado localmente (solo se borra si desinstalas la app). Podrás renombrar o compartir tus sesiones."
                                     5 -> "En este engranaje podrás ajustar la Calibración de Offset con un sonómetro patrón, aprender a interpretar tus resultados, o volver a ver este tutorial cuando lo desees."
-                                    else -> "Cuando estés listo, presiona este botón para iniciar tu primera medición en segundo plano."
+                                    else -> "Toca COMENZAR para iniciar la medición. Al detenerla, usa 'Guardar sesión como' para almacenarla permanentemente."
                                 },
                                 color = TextSecondary, fontFamily = BricolageGrotesque
                             )

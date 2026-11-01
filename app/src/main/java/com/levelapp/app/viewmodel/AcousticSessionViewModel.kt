@@ -74,6 +74,11 @@ class AcousticSessionViewModel(
         _uiState.value = _uiState.value.copy(status = "Running", savedSessionId = null)
     }
     
+    fun stopRecording() {
+        isRecording = false
+        _uiState.value = _uiState.value.copy(status = "Stopped")
+    }
+
     fun pauseSession() {
         isRecording = false
         _uiState.value = _uiState.value.copy(status = "Paused")

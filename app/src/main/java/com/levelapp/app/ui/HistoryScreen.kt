@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.levelapp.app.csv.CsvReportExporter
 import com.levelapp.app.pdf.PdfReportExporter
+import com.levelapp.app.utils.ShareUtils
 import com.levelapp.app.viewmodel.AcousticSessionViewModel
 import com.levelapp.data.database.SessionEntity
 import java.text.SimpleDateFormat
@@ -175,21 +176,21 @@ fun SessionCard(session: SessionEntity, onDelete: () -> Unit, onRename: (Long, S
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Exportar CSV", color = TextPrimary) },
+                            text = { Text("Compartir CSV", color = TextPrimary) },
                             onClick = {
                                 expanded = false
                                 val exporter = CsvReportExporter(context)
                                 val file = exporter.generateSessionCsv(session)
-                                Toast.makeText(context, "CSV: ${file.name}", Toast.LENGTH_LONG).show()
+                                ShareUtils.shareFile(context, file, "text/csv")
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Exportar PDF", color = TextPrimary) },
+                            text = { Text("Compartir PDF", color = TextPrimary) },
                             onClick = {
                                 expanded = false
                                 val exporter = PdfReportExporter(context)
                                 val file = exporter.generateSessionPdf(session.id.toString(), session.title)
-                                Toast.makeText(context, "PDF: ${file.name}", Toast.LENGTH_LONG).show()
+                                ShareUtils.shareFile(context, file, "application/pdf")
                             }
                         )
                         DropdownMenuItem(
