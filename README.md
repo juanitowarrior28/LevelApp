@@ -1,45 +1,45 @@
-# LevelApp
+# LevelApp - Dosimetría Acústica Ocupacional
 
-Aplicación Android modular para dosimetría acústica ocupacional con arquitectura limpia, motor DSP dedicado, calibración explícita, perfiles regulatorios desacoplados y persistencia local segura.
+LevelApp es una aplicación Android modular y profesional para la medición de ruido y cálculo de dosis acústica en entornos laborales. Combina una arquitectura limpia con un motor DSP (Procesamiento Digital de Señales) avanzado para ofrecer métricas precisas en tiempo real, persistencia local y reportes detallados.
 
-## Fases implementadas
+## 🚀 Características Principales
 
-1. Arquitectura modular y separación de capas.
-2. Captura de audio en tiempo real con permisos y servicio foreground (Filtro DSP A-Weighting integrado).
-3. Motor DSP: Filtro IIR Ponderación A, cálculo de dosis acumulada (NIOSH y OSHA).
-4. Interfaz adaptativa Dark Mode con `Jetpack Compose` (Curvas de nivel e Historial).
-5. Sistema de Onboarding guiado mediante Canvas/BlendMode.Clear (Spotlight Tutorial).
-6. Persistencia local con Room (Historial de mediciones seguro).
-7. Exportación versátil de reportes: CSV y PDF.
-8. Configuración dinámica de Calibración de Offset.
+* **Medición en Segundo Plano (Foreground Service):** Captura continua de audio, permitiendo apagar la pantalla o cambiar de app sin detener la medición de ruido.
+* **Procesamiento de Señal Avanzado (DSP):** Implementa un filtro digital IIR de Ponderación A (A-Weighting) adaptado a la respuesta del oído humano.
+* **Dosimetría de Ruido:** Soporte dinámico para normativas internacionales **NIOSH** (límite 85dB / intercambio 3dB) y **OSHA** (límite 90dB / intercambio 5dB).
+* **Alertas Hápticas:** Alarma por vibración automática cuando el trabajador alcanza el 100% de la dosis diaria segura.
+* **Interfaz Moderna Oscura (Dark Theme):** Desarrollada 100% en Jetpack Compose, con gráficos (Canvas) de nivel sonoro en tiempo real y semaforización de riesgo.
+* **Onboarding Interactivo (Spotlight Tour):** Tutorial guiado nativo (creado con Canvas y BlendMode.Clear) para enseñar el uso de la app paso a paso en el primer inicio.
+* **Gestión de Sesiones (Room DB):** Historial persistente local para revisar, renombrar o eliminar sesiones pasadas de forma segura y privada.
+* **Exportación de Reportes:** Generación de informes formales en **PDF** y exportación de datos crudos en **CSV**.
+* **Calibración Manual:** Ajuste dinámico de Offset en dB para emparejar las lecturas del celular con un sonómetro físico patrón.
 
-## Módulos
+## 🧩 Estructura de Módulos
 
-- `:core`: DSP, calibración, filtros, perfiles regulatorios y pruebas unitarias.
-- `:data`: entidades Room, DAO y repositorio local.
-- `:app`: UI, permisos, servicio foreground, exportación PDF y entrada principal.
+El proyecto está dividido en tres módulos siguiendo buenas prácticas de separación de responsabilidades:
+- `:core`: Contiene las reglas de negocio puras, motor matemático DSP, filtros IIR, y cálculos de dosis/TWA.
+- `:data`: Persistencia de datos utilizando Room Database (Entidades, DAO y Repositorio Local).
+- `:app`: Capa de presentación (Jetpack Compose UI), Servicio en Segundo Plano (Micrófono), permisos y exportadores de archivos (PDF/CSV).
 
-## Requisitos
+## 🛠️ Requisitos del Entorno
 
-- Android Studio Iguana o posterior.
-- JDK 17.
-- Android SDK con API 34 instalada.
+- Android Studio Iguana (o superior).
+- Java JDK 17.
+- Dispositivo Android con API mínima 26 (Android 8.0) y Target API 34.
 
-## Ejecución
+## 💻 Construcción y Ejecución
+
+Puedes compilar la aplicación utilizando Android Studio o directamente desde tu terminal con Gradle:
 
 ```bash
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
-export PATH="$JAVA_HOME/bin:$PATH"
+# Compilar la aplicación en modo Debug
+./gradlew :app:assembleDebug
+
+# Ejecutar las pruebas unitarias del núcleo matemático
 ./gradlew :core:test
-./gradlew :app:compileDebugKotlin
 ```
 
-## Limitaciones regulatorias y metrológicas
+## ⚠️ Advertencia Metrológica y Legal
 
-La aplicación no se presenta como instrumento certificado ni como cumplimiento formal con IEC, ISO, NIOSH u otra normativa. La medición se trabaja con estados de calibración claramente diferenciados:
-
-- `NOT_CALIBRATED`
-- `CALIBRATED_UNVALIDATED`
-- `VALIDATED`
-
-La validación formal requiere trazabilidad metrológica y procedimientos de calibración documentados.
+**LevelApp tiene fines preventivos, referenciales y educativos.** 
+Esta aplicación no sustituye a un dosímetro acústico integrador Clase 1 o Clase 2 certificado bajo las normativas internacionales (IEC 61672). Los micrófonos de los smartphones pueden presentar compresión acústica de hardware a altos niveles de presión. Para mediciones en campo, se requiere estrictamente configurar la **Calibración de Offset** comparándola con un instrumento patrón. Los resultados arrojados por esta app no tienen validez legal sancionatoria o pericial sin trazabilidad metrológica.
