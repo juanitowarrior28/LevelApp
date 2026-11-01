@@ -137,6 +137,7 @@ fun AcousticSessionScreen(
     var sessionName by remember { mutableStateOf("") }
     var showCalibration by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
+    var showInterpretationDialog by remember { mutableStateOf(false) }
     var hasVibrated by remember { mutableStateOf(false) }
     
     var tutorialStep by remember { mutableIntStateOf(0) }
@@ -217,6 +218,10 @@ fun AcousticSessionScreen(
             onTutorialSelect = { 
                 showSettingsMenu = false
                 tutorialStep = 1 
+            },
+            onInterpretationSelect = {
+                showSettingsMenu = false
+                showInterpretationDialog = true
             }
         )
     }
@@ -229,6 +234,10 @@ fun AcousticSessionScreen(
                 viewModel.setCalibrationOffset(offset.toDouble())
             }
         )
+    }
+
+    if (showInterpretationDialog) {
+        InterpretationDialog(onDismiss = { showInterpretationDialog = false })
     }
 
     DosimetroTheme {
@@ -571,7 +580,7 @@ fun DoseCard(dose: Float, isNioshSelected: Boolean) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                 Text("Dosis Acumulada", color = TextPrimary, fontSize = 14.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.SemiBold)
-                Text(if (isNioshSelected) "NIOSH (8h)" else "OSHA (8h)", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(if (isNioshSelected) "NIOSH" else "OSHA", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(4.dp))
             
@@ -631,7 +640,12 @@ fun ActionButtons(isRunning: Boolean, onMainClick: () -> Unit) {
 }
 
 @Composable
-fun SettingsMenuDialog(onDismiss: () -> Unit, onCalibrationSelect: () -> Unit, onTutorialSelect: () -> Unit) {
+fun SettingsMenuDialog(
+    onDismiss: () -> Unit, 
+    onCalibrationSelect: () -> Unit, 
+    onTutorialSelect: () -> Unit,
+    onInterpretationSelect: () -> Unit
+) {
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = SurfaceCard)) {
             Column(Modifier.padding(24.dp).fillMaxWidth()) {
@@ -653,6 +667,15 @@ fun SettingsMenuDialog(onDismiss: () -> Unit, onCalibrationSelect: () -> Unit, o
                 ) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                         Text("Cómo usar la app", color = TextPrimary, fontSize = 16.sp, fontFamily = BricolageGrotesque)
+                    }
+                }
+                TextButton(
+                    onClick = onInterpretationSelect,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                        Text("Interpretar Resultados", color = TextPrimary, fontSize = 16.sp, fontFamily = BricolageGrotesque)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -688,6 +711,34 @@ fun CalibrationDialog(initialOffset: Float, onDismiss: () -> Unit, onSave: (Floa
                     TextButton(onDismiss) { Text("CANCELAR", color = TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold) }
                     Button(onClick = { onSave(textValue.toFloatOrNull() ?: 0f); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary)) { 
                         Text("GUARDAR", color = Color.White, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold) 
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InterpretationDialog(onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = SurfaceCard)) {
+            Column(Modifier.padding(24.dp).height(450.dp)) {
+                Text("Cómo interpretar tus resultados", fontSize = 20.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = PeriwinklePrimary)
+                Box(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp).verticalScroll(rememberScrollState())) {
+                    Column {
+                        Text("• ¿Cómo funciona?", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
+                        Text("El micrófono se coloca cerca del oído del trabajador (en el hombro). El aparato acumula la energía acústica recibida a lo largo del tiempo y calcula la Dosis de Ruido recibida en porcentaje.", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text("• Criterio de evaluación", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
+                        Text("Una dosis del 100% equivale a haber estado expuesto al límite máximo permitido para una jornada de 8 horas (que habitualmente es de 85 dBA, según la normativa local). Si el dosímetro marca más del 100%, significa que se ha superado el límite seguro y hay riesgo de hipoacusia (pérdida de audición).", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text("• Diferencias de Normativa", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
+                        Text("NIOSH establece el límite seguro en 85 dBA con una tasa de intercambio de 3 dB (si el ruido sube 3 dB, el tiempo máximo seguro se reduce a la mitad). OSHA es un criterio legal más permisivo que sitúa el límite en 90 dBA con intercambio de 5 dB.", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary)) {
+                        Text("ENTENDIDO", color = Color.White, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
                     }
                 }
             }
