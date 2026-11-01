@@ -334,8 +334,8 @@ fun AcousticSessionScreen(
                                 }
                             }
                     ) {
-                        // Draw Dark Overlay (Lower opacity for blurry effect, combined with the blur modifier behind)
-                        drawRect(Color.Black.copy(alpha = 0.40f))
+                        // Draw Dark Overlay (Semitransparent dark overlay for the spotlight effect)
+                        drawRect(Color.Black.copy(alpha = 0.75f))
                         
                         // Dynamic inflation for drawing the hole
                         val inflateX = if (currentRect.width < 150f) 40f else 20f
@@ -375,11 +375,11 @@ fun AcousticSessionScreen(
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 text = when(tutorialStep) {
-                                    1 -> "Este es tu medidor en tiempo real."
-                                    2 -> "Porcentaje de ruido de tu día que ya has consumido. ¡Vibrará al llegar al 100%!"
-                                    3 -> "Toca aquí para cambiar la normativa de evaluación de riesgo. ¡Puedes probarlo ahora mismo!"
-                                    4 -> "En este menú encontrarás el historial de mediciones. Allí podrás renombrar, borrar y exportar tus sesiones a PDF o CSV."
-                                    5 -> "En este engranaje podrás ajustar la Calibración (Offset) si usas un sonómetro de referencia, o volver a ver este tutorial."
+                                    1 -> "Mide el Nivel de Presión Sonora en dB(A) simulando la respuesta del oído humano. Se pondrá naranja o rojo si la intensidad del ruido alcanza niveles perjudiciales para la salud."
+                                    2 -> "Porcentaje de ruido seguro de tu día que ya has consumido. ¡Vibrará al llegar al 100%!"
+                                    3 -> "Este botón te permite cambiar la normativa de exposición al ruido. Sugerimos usar NIOSH (más estricto, límite 85dB) para mayor prevención, u OSHA si tu industria requiere dicho estándar legal (límite 90dB)."
+                                    4 -> "Aquí encontrarás tus sesiones pasadas. Tu historial dura para siempre guardado localmente (solo se borra si desinstalas la app). Podrás renombrar o exportar tus sesiones."
+                                    5 -> "En este engranaje podrás ajustar la Calibración de Offset si utilizas un sonómetro físico patrón, o volver a ver este tutorial cuando lo desees."
                                     else -> "Cuando estés listo, presiona este botón para iniciar tu primera medición en segundo plano."
                                 },
                                 color = TextSecondary, fontFamily = BricolageGrotesque
