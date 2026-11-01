@@ -385,100 +385,16 @@ fun AcousticSessionScreen(
                                 color = TextSecondary, fontFamily = BricolageGrotesque
                             )
                             Spacer(Modifier.height(24.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                TextButton(onClick = { tutorialStep = 0 }) {
-                                    Text("SALTAR", color = TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
-                                }
-                                Button(
-                                    onClick = { if (tutorialStep < 6) tutorialStep++ else tutorialStep = 0 },
-                                    colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary)
-                                ) {
-                                    Text(if (tutorialStep < 6) "SIGUIENTE" else "ENTENDIDO", color = Color.White, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if (tutorialStep in 1..4) {
-                val currentRect = targetRects[tutorialStep]
-                if (currentRect != null) {
-                    val density = LocalDensity.current
-                    val screenHeightPx = LocalConfiguration.current.screenHeightDp * density.density
-                    val isTopHalf = currentRect.center.y < (screenHeightPx / 2)
-
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = 0.99f } // Forces offscreen render for BlendMode.Clear to work on the dark layer only
-                            .pointerInput(currentRect) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                                        val pos = event.changes.first().position
-                                        // Inflate the hole for touch by 40px
-                                        val isInsideHole = pos.x >= currentRect.left - 40f && pos.x <= currentRect.right + 40f &&
-                                                           pos.y >= currentRect.top - 40f && pos.y <= currentRect.bottom + 40f
-                                        
-                                        if (!isInsideHole) {
-                                            // Consume touches outside the hole so background can't be interacted with
-                                            event.changes.forEach { it.consume() }
-                                        }
-                                        // If inside the hole, the touch passes through to the underlying UI!
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = { tutorialStep = 0 }) {
+                                        Text("SALTAR", color = TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
                                     }
-                                }
-                            }
-                    ) {
-                        // Draw Dark Overlay
-                        drawRect(Color.Black.copy(alpha = 0.85f))
-                        
-                        // Punch Hole
-                        drawRoundRect(
-                            color = Color.Transparent,
-                            topLeft = Offset(currentRect.left - 40f, currentRect.top - 40f),
-                            size = androidx.compose.ui.geometry.Size(currentRect.width + 80f, currentRect.height + 80f),
-                            cornerRadius = CornerRadius(40f, 40f),
-                            blendMode = BlendMode.Clear
-                        )
-                    }
-
-                    // Tooltip Dialog Card
-                    Card(
-                        modifier = Modifier
-                            .align(if (isTopHalf) Alignment.BottomCenter else Alignment.TopCenter)
-                            .padding(horizontal = 16.dp, vertical = 64.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                        shape = RoundedCornerShape(24.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                    ) {
-                        Column(Modifier.padding(24.dp)) {
-                            Text(
-                                text = when(tutorialStep) {
-                                    1 -> "1. Nivel Sonoro"
-                                    2 -> "2. Dosis Acumulada"
-                                    3 -> "3. NIOSH vs OSHA"
-                                    4 -> "4. Historial y Reportes"
-                                    5 -> "5. Configuración"
-                                    else -> "6. ¡Comenzar!"
-                                },
-                                fontSize = 18.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = PeriwinklePrimary
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = when(tutorialStep) {
-                                    1 -> "Este es tu medidor en tiempo real. ¡Tócalo si quieres probarlo!"
-                                    2 -> "Porcentaje de ruido seguro de tu día que ya has consumido. ¡Vibrará al llegar al 100%!"
-                                    3 -> "Toca aquí mismo el botón OSHA para cambiar la normativa, es totalmente interactivo."
-                                    4 -> "En este menú encontrarás el historial de mediciones. Allí podrás renombrar, borrar y exportar tus sesiones a PDF o CSV."
-                                    5 -> "En este engranaje podrás ajustar la Calibración (Offset) si usas un sonómetro de referencia, o volver a ver este tutorial."
-                                    else -> "Toca COMENZAR para iniciar tu primera medición en segundo plano."
-                                },
-                                color = TextSecondary, fontFamily = BricolageGrotesque
-                            )
-                            Spacer(Modifier.height(24.dp))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                TextButton(onClick = { tutorialStep = 0 }) {
-                                    Text("SALTAR", color = TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                                    if (tutorialStep > 1) {
+                                        TextButton(onClick = { tutorialStep-- }) {
+                                            Text("ATRÁS", color = PeriwinklePrimary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                                 Button(
                                     onClick = { if (tutorialStep < 6) tutorialStep++ else tutorialStep = 0 },
