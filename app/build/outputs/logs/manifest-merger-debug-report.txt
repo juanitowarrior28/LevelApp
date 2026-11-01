@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:2:1-34:12
-INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:2:1-34:12
-INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:2:1-34:12
-INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:2:1-34:12
+ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:2:1-35:12
+INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:2:1-35:12
+INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:2:1-35:12
+INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:2:1-35:12
 MERGED from [:data] C:\Users\USER\LevelApp\data\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:2:1-7:12
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\USER\.gradle\caches\transforms-4\e5652224860a8728a0028a28ce4dfc63\transformed\material-1.12.0\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\USER\.gradle\caches\transforms-4\0d32914b876d864cebddbf9e38a21478\transformed\constraintlayout-2.0.1\AndroidManifest.xml:2:1-11:12
@@ -130,8 +130,8 @@ ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:10:5-108
 	android:name
 		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:10:22-78
 application
-ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:12:5-32:19
-INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:12:5-32:19
+ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:12:5-33:19
+INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:12:5-33:19
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\USER\.gradle\caches\transforms-4\e5652224860a8728a0028a28ce4dfc63\transformed\material-1.12.0\AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.12.0] C:\Users\USER\.gradle\caches\transforms-4\e5652224860a8728a0028a28ce4dfc63\transformed\material-1.12.0\AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\USER\.gradle\caches\transforms-4\0d32914b876d864cebddbf9e38a21478\transformed\constraintlayout-2.0.1\AndroidManifest.xml:9:5-20
@@ -173,29 +173,31 @@ MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\US
 	android:name
 		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:13:9-44
 activity#com.levelapp.app.MainActivity
-ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:19:9-26:20
+ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:19:9-27:20
+	android:screenOrientation
+		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:21:13-49
 	android:exported
-		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:21:13-36
+		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:22:13-36
 	android:name
 		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:20:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:22:13-25:29
+ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:23:13-26:29
 action#android.intent.action.MAIN
-ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:23:17-69
+ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:24:17-69
 	android:name
-		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:23:25-66
+		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:24:25-66
 category#android.intent.category.LAUNCHER
-ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:24:17-77
+ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:25:17-77
 	android:name
-		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:24:27-74
+		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:25:27-74
 service#com.levelapp.app.service.AcousticForegroundService
-ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:28:9-31:58
+ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:29:9-32:58
 	android:exported
-		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:30:13-37
+		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:31:13-37
 	android:foregroundServiceType
-		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:31:13-55
+		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:32:13-55
 	android:name
-		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:29:13-62
+		ADDED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml:30:13-62
 uses-sdk
 INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from C:\Users\USER\LevelApp\app\src\main\AndroidManifest.xml

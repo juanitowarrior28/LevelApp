@@ -232,8 +232,14 @@ fun AcousticSessionScreen(
     }
 
     DosimetroTheme {
-        Box(Modifier.fillMaxSize().background(DarkBg).systemBarsPadding().padding(16.dp)) {
-            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxSize().background(DarkBg)) {
+            // El modificador blur se removió de toda la columna para no afectar los elementos resaltados
+            Column(
+                Modifier.fillMaxSize()
+                    .systemBarsPadding()
+                    .padding(16.dp), 
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Header(
                     onSettingsClick = { showSettingsMenu = true },
                     onOpenHistory = onOpenHistory,
@@ -292,6 +298,10 @@ fun AcousticSessionScreen(
 
             // --- Interactive Spotlight Guided Tour ---
             if (tutorialStep in 1..6) {
+                // Dibujamos un fondo blur falso usando un canvas separado debajo del recorte
+                // pero por encima de la UI. En Android moderno, el efecto blur real a un fondo es costoso
+                // y corta los elementos. La capa negra semitransparente es la mejor practica.
+                
                 val currentRect = targetRects[tutorialStep]
                 if (currentRect != null) {
                     val density = LocalDensity.current
@@ -324,8 +334,8 @@ fun AcousticSessionScreen(
                                 }
                             }
                     ) {
-                        // Draw Dark Overlay (Lower opacity for blurry effect)
-                        drawRect(Color.Black.copy(alpha = 0.70f))
+                        // Draw Dark Overlay (Lower opacity for blurry effect, combined with the blur modifier behind)
+                        drawRect(Color.Black.copy(alpha = 0.40f))
                         
                         // Dynamic inflation for drawing the hole
                         val inflateX = if (currentRect.width < 150f) 40f else 20f
@@ -447,7 +457,9 @@ fun AcousticSessionScreen(
                                     1 -> "1. Nivel Sonoro"
                                     2 -> "2. Dosis Acumulada"
                                     3 -> "3. NIOSH vs OSHA"
-                                    else -> "4. Controles"
+                                    4 -> "4. Historial y Reportes"
+                                    5 -> "5. Configuración"
+                                    else -> "6. ¡Comenzar!"
                                 },
                                 fontSize = 18.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = PeriwinklePrimary
                             )
@@ -457,7 +469,9 @@ fun AcousticSessionScreen(
                                     1 -> "Este es tu medidor en tiempo real. ¡Tócalo si quieres probarlo!"
                                     2 -> "Porcentaje de ruido seguro de tu día que ya has consumido. ¡Vibrará al llegar al 100%!"
                                     3 -> "Toca aquí mismo el botón OSHA para cambiar la normativa, es totalmente interactivo."
-                                    else -> "Toca COMENZAR para iniciar tu primera medición ahora mismo."
+                                    4 -> "En este menú encontrarás el historial de mediciones. Allí podrás renombrar, borrar y exportar tus sesiones a PDF o CSV."
+                                    5 -> "En este engranaje podrás ajustar la Calibración (Offset) si usas un sonómetro de referencia, o volver a ver este tutorial."
+                                    else -> "Toca COMENZAR para iniciar tu primera medición en segundo plano."
                                 },
                                 color = TextSecondary, fontFamily = BricolageGrotesque
                             )
@@ -467,10 +481,10 @@ fun AcousticSessionScreen(
                                     Text("SALTAR", color = TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
                                 }
                                 Button(
-                                    onClick = { if (tutorialStep < 4) tutorialStep++ else tutorialStep = 0 },
+                                    onClick = { if (tutorialStep < 6) tutorialStep++ else tutorialStep = 0 },
                                     colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary)
                                 ) {
-                                    Text(if (tutorialStep < 4) "SIGUIENTE" else "ENTENDIDO", color = Color.White, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                                    Text(if (tutorialStep < 6) "SIGUIENTE" else "ENTENDIDO", color = Color.White, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
