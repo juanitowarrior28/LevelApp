@@ -388,7 +388,7 @@ fun AcousticSessionScreen(
                                     2 -> "Porcentaje de ruido seguro de tu día que ya has consumido. ¡Vibrará al llegar al 100%!"
                                     3 -> "Este botón te permite cambiar la normativa de exposición al ruido. Sugerimos usar NIOSH (más estricto, límite 85dB) para mayor prevención, u OSHA si tu industria requiere dicho estándar legal (límite 90dB)."
                                     4 -> "Aquí encontrarás tus sesiones pasadas. Tu historial dura para siempre guardado localmente (solo se borra si desinstalas la app). Podrás renombrar o exportar tus sesiones."
-                                    5 -> "En este engranaje podrás ajustar la Calibración de Offset si utilizas un sonómetro físico patrón, o volver a ver este tutorial cuando lo desees."
+                                    5 -> "En este engranaje podrás ajustar la Calibración de Offset con un sonómetro patrón, aprender a interpretar tus resultados, o volver a ver este tutorial cuando lo desees."
                                     else -> "Cuando estés listo, presiona este botón para iniciar tu primera medición en segundo plano."
                                 },
                                 color = TextSecondary, fontFamily = BricolageGrotesque
