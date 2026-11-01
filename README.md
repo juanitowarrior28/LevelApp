@@ -43,3 +43,12 @@ Puedes compilar la aplicación utilizando Android Studio o directamente desde tu
 
 **LevelApp tiene fines preventivos, referenciales y educativos.** 
 Esta aplicación no sustituye a un dosímetro acústico integrador Clase 1 o Clase 2 certificado bajo las normativas internacionales (IEC 61672). Los micrófonos de los smartphones pueden presentar compresión acústica de hardware a altos niveles de presión. Para mediciones en campo, se requiere estrictamente configurar la **Calibración de Offset** comparándola con un instrumento patrón. Los resultados arrojados por esta app no tienen validez legal sancionatoria o pericial sin trazabilidad metrológica.
+
+---
+
+## 👥 Autores y Reconocimientos
+
+Proyecto desarrollado por:
+- **Cielo Isabel Ochoa**
+- **Juan José Guerrero**
+- *"Mel Osako"*
