@@ -1,0 +1,19 @@
+package com.levelapp.data.repository
+
+import com.levelapp.data.database.AcousticSessionDao
+import com.levelapp.data.database.MeasurementPointEntity
+import com.levelapp.data.database.SessionEntity
+import kotlinx.coroutines.flow.Flow
+
+class SessionRepositoryImpl(
+    private val dao: AcousticSessionDao,
+) {
+    suspend fun saveSession(session: SessionEntity): Long = dao.insertSession(session)
+    suspend fun saveMeasurement(point: MeasurementPointEntity): Long = dao.insertMeasurementPoint(point)
+    suspend fun getSessionById(sessionId: Long): SessionEntity? = dao.getSessionById(sessionId)
+    fun observeSessions(): Flow<List<SessionEntity>> = dao.observeSessions()
+    fun observeMeasurementPoints(sessionId: Long): Flow<List<MeasurementPointEntity>> = dao.observeMeasurementPoints(sessionId)
+    suspend fun deleteSession(sessionId: Long) = dao.deleteSession(sessionId)
+    suspend fun deleteAllSessions() = dao.deleteAllSessions()
+    suspend fun renameSession(sessionId: Long, newTitle: String) = dao.renameSession(sessionId, newTitle)
+}
