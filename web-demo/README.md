@@ -4,17 +4,21 @@ Demo web para probar la UX y la lógica de cálculo de la app de dosimetría ac�
 
 ## Cómo probarla
 
-1. Entra a la carpeta `web-demo`.
-2. Ejecuta un servidor local:
+Puedes probarla en iPhone o Android desde:
+
+**https://juanitowarrior28.github.io/LevelApp/**
+
+Ábrela en Safari, pulsa **Iniciar** y acepta el permiso del micrófono. La demo necesita HTTPS para acceder al micrófono desde el navegador.
+
+Para probarla localmente en una computadora:
 
 ```bash
-cd /Users/warriorjuanjgg/Library/CloudStorage/OneDrive-Personal/LevelApp/web-demo
+cd web-demo
 python3 -m http.server 8000
 ```
 
-3. Abre `http://localhost:8000` en tu navegador.
-4. Acepta el permiso del micrófono si tu navegador lo solicita.
+Luego abre `http://localhost:8000` en esa misma computadora.
 
 ## Importante
 
-Este es un prototipo de prueba para UX y lógica. No sustituye mediciones metrológicamente validadas ni instrumentos certificados.
+Este es un prototipo de prueba para UX y lógica. Mantén la página abierta durante la medición; el navegador puede detener la captura al bloquear el teléfono o cambiar de app. No sustituye mediciones metrológicamente validadas ni instrumentos certificados.
