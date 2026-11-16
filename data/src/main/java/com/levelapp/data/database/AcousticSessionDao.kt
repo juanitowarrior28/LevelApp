@@ -14,11 +14,23 @@ interface AcousticSessionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMeasurementPoint(point: MeasurementPointEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMeasurementPoints(points: List<MeasurementPointEntity>)
+
     @Query("SELECT * FROM sessions ORDER BY startedAtEpochMs DESC")
     fun observeSessions(): Flow<List<SessionEntity>>
 
     @Query("SELECT * FROM measurement_points WHERE session_id = :sessionId ORDER BY timestampEpochMs ASC")
     fun observeMeasurementPoints(sessionId: Long): Flow<List<MeasurementPointEntity>>
+
+    @Query("SELECT * FROM measurement_points WHERE session_id = :sessionId ORDER BY timestampEpochMs ASC")
+    suspend fun getMeasurementPoints(sessionId: Long): List<MeasurementPointEntity>
+
+    @Query("DELETE FROM measurement_points WHERE session_id = :sessionId")
+    suspend fun deleteMeasurementPointsForSession(sessionId: Long)
+
+    @Query("DELETE FROM measurement_points")
+    suspend fun deleteAllMeasurementPoints()
 
     @Query("DELETE FROM sessions WHERE id = :sessionId")
     suspend fun deleteSession(sessionId: Long)

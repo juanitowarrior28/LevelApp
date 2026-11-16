@@ -2,6 +2,7 @@ package com.levelapp.app
 
 import android.app.Application
 import androidx.room.Room
+import com.levelapp.app.service.AudioDataStream
 import com.levelapp.data.database.AcousticDatabase
 import com.levelapp.data.repository.SessionRepositoryImpl
 
@@ -13,11 +14,15 @@ class LevelAppApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AudioDataStream.init(this)
         database = Room.databaseBuilder(
             this,
             AcousticDatabase::class.java,
             "acoustic_db"
-        ).build()
+        )
+            .addMigrations(AcousticDatabase.MIGRATION_1_2, AcousticDatabase.MIGRATION_2_3)
+            .fallbackToDestructiveMigration()
+            .build()
         sessionRepository = SessionRepositoryImpl(database.acousticSessionDao())
     }
 }

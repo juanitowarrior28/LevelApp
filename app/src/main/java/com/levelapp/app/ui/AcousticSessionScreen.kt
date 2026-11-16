@@ -82,8 +82,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.mutableStateMapOf
 import com.levelapp.app.R
+import com.levelapp.app.csv.CsvReportExporter
 import com.levelapp.app.pdf.PdfReportExporter
 import com.levelapp.app.viewmodel.AcousticSessionViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -131,11 +133,18 @@ fun AcousticSessionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val history by viewModel.history.collectAsState()
+    val allSessions by viewModel.allSessions.collectAsState()
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
 
     var showStopDialog by remember { mutableStateOf(false) }
     var sessionName by remember { mutableStateOf("") }
+    var workerName by remember { mutableStateOf("") }
+    var workerRole by remember { mutableStateOf("") }
+    var areaName by remember { mutableStateOf("") }
+    var evaluatorName by remember { mutableStateOf("") }
+    var sessionNotes by remember { mutableStateOf("") }
     var showCalibration by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showInterpretationDialog by remember { mutableStateOf(false) }
@@ -172,38 +181,118 @@ fun AcousticSessionScreen(
     }
 
     if (showStopDialog) {
+        val fieldColors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = PeriwinklePrimary,
+            unfocusedBorderColor = BorderSoft,
+            focusedLabelColor = PeriwinklePrimary,
+            unfocusedLabelColor = TextSecondary,
+            unfocusedTextColor = TextPrimary,
+            focusedTextColor = TextPrimary
+        )
         AlertDialog(
             onDismissRequest = { showStopDialog = false },
-            title = { Text("Guardar sesión como", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = { 
-                Column {
-                    Text("La medición se guardará con una dosis de ${"%.2f".format(uiState.dose)}%.", color = TextSecondary)
-                    Spacer(Modifier.height(16.dp))
+            title = {
+                Text(
+                    "Guardar sesión y datos del reporte",
+                    color = TextPrimary,
+                    fontFamily = BricolageGrotesque,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "Dosis acumulada: ${"%.2f".format(uiState.dose)}% • LAeq: ${"%.1f".format(uiState.laeq)} dBA",
+                        color = PeriwinklePrimary,
+                        fontFamily = BricolageGrotesque,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
                     OutlinedTextField(
                         value = sessionName,
                         onValueChange = { sessionName = it },
-                        label = { Text("Nombre de la medición") },
+                        label = { Text("Nombre de la medición", fontFamily = BricolageGrotesque) },
                         singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PeriwinklePrimary,
-                            focusedLabelColor = PeriwinklePrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedTextColor = TextPrimary
-                        )
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors
+                    )
+                    OutlinedTextField(
+                        value = workerName,
+                        onValueChange = { workerName = it },
+                        label = { Text("Nombre completo de la persona", fontFamily = BricolageGrotesque) },
+                        placeholder = { Text("Ej. Juan Carlos Pérez", color = TextSecondary) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors
+                    )
+                    OutlinedTextField(
+                        value = workerRole,
+                        onValueChange = { workerRole = it },
+                        label = { Text("Cargo / GES", fontFamily = BricolageGrotesque) },
+                        placeholder = { Text("Ej. Operario de Planta", color = TextSecondary) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors
+                    )
+                    OutlinedTextField(
+                        value = areaName,
+                        onValueChange = { areaName = it },
+                        label = { Text("Área / Lugar de la medición", fontFamily = BricolageGrotesque) },
+                        placeholder = { Text("Ej. Taller de Metalmecánica", color = TextSecondary) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors
+                    )
+                    OutlinedTextField(
+                        value = evaluatorName,
+                        onValueChange = { evaluatorName = it },
+                        label = { Text("Evaluador / Licencia SST (opcional)", fontFamily = BricolageGrotesque) },
+                        placeholder = { Text("Ej. Ing. SST - Lic. 12345", color = TextSecondary) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors
+                    )
+                    OutlinedTextField(
+                        value = sessionNotes,
+                        onValueChange = { sessionNotes = it },
+                        label = { Text("Descripción / Observaciones (opcional)", fontFamily = BricolageGrotesque) },
+                        placeholder = { Text("Condiciones, fuentes de ruido, EPP usado...", color = TextSecondary) },
+                        minLines = 2,
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors
                     )
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    showStopDialog = false
-                    viewModel.finishAndSaveSession(workerName = "Trabajador", evaluator = "Evaluador", customTitle = sessionName)
-                    onStopService()
-                }, colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary)) {
-                    Text("Guardar", color = Color.White)
+                Button(
+                    onClick = {
+                        showStopDialog = false
+                        viewModel.finishAndSaveSession(
+                            workerName = workerName,
+                            workerRole = workerRole,
+                            area = areaName,
+                            evaluator = evaluatorName,
+                            notes = sessionNotes,
+                            customTitle = sessionName
+                        )
+                        onStopService()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary)
+                ) {
+                    Text("Guardar", color = Color.White, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showStopDialog = false }) { Text("Seguir midiendo", color = PeriwinklePrimary) }
+                TextButton(onClick = { showStopDialog = false }) {
+                    Text("Cancelar", color = PeriwinklePrimary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                }
             },
             containerColor = SurfaceCard,
             shape = RoundedCornerShape(24.dp)
@@ -265,30 +354,75 @@ fun AcousticSessionScreen(
                 LevelHistoryGraph(Modifier.weight(1f).fillMaxWidth(), history, isRunning)
                 Spacer(Modifier.height(24.dp))
                 Box(Modifier.onGloballyPositioned { targetRects[2] = it.boundsInRoot() }) {
-                    DoseCard(uiState.dose.toFloat(), uiState.isNiosh)
+                    DoseCard(uiState.dose.toFloat(), uiState.profileId)
                 }
                 Spacer(Modifier.height(16.dp))
                 Box(Modifier.onGloballyPositioned { targetRects[3] = it.boundsInRoot() }) {
-                    CriteriaToggleRow(uiState.isNiosh) {
+                    CriteriaToggleRow(uiState.profileId) {
                         viewModel.updateCriterion(it)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
                 
                 if (uiState.status == "Completada" && uiState.savedSessionId != null) {
-                    Button(
-                        modifier = Modifier.fillMaxWidth().height(56.dp).onGloballyPositioned { targetRects[6] = it.boundsInRoot() },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary),
-                        onClick = {
-                        val exporter = PdfReportExporter(context)
-                        val file = exporter.generateSessionPdf(
-                            sessionId = uiState.savedSessionId.toString(),
-                            title = "Reporte de Dosimetría"
-                        )
-                        ShareUtils.shareFile(context, file, "application/pdf")
-                    }) {
-                        Text("Compartir Reporte PDF", color = Color.White, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().onGloballyPositioned { targetRects[6] = it.boundsInRoot() },
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            modifier = Modifier.weight(1.2f).height(56.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary),
+                            onClick = {
+                                val session = uiState.lastSavedSession
+                                    ?: allSessions.firstOrNull { it.id == uiState.savedSessionId }
+                                if (session != null) {
+                                    val exporter = PdfReportExporter(context)
+                                    val file = exporter.generateSessionPdf(session)
+                                    ShareUtils.shareFile(context, file, "application/pdf")
+                                } else {
+                                    Toast.makeText(context, "Cargando sesión guardada...", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("Reporte PDF", color = Color.White, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            modifier = Modifier.weight(1f).height(56.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PeriwinkleLight),
+                            onClick = {
+                                val session = uiState.lastSavedSession
+                                    ?: allSessions.firstOrNull { it.id == uiState.savedSessionId }
+                                if (session != null) {
+                                    scope.launch {
+                                        val pts = uiState.lastSavedPoints.ifEmpty {
+                                            viewModel.getSessionPoints(session.id)
+                                        }
+                                        val exporter = CsvReportExporter(context)
+                                        val file = exporter.generateSessionCsv(session, pts)
+                                        ShareUtils.shareFile(context, file, "text/csv")
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Cargando sesión guardada...", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("Datos CSV", color = PeriwinklePrimary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            modifier = Modifier.height(56.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCard),
+                            border = BorderStroke(1.dp, BorderSoft),
+                            onClick = {
+                                sessionName = "Medición_${SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(Date())}"
+                                viewModel.startSession()
+                                onStartService()
+                            }
+                        ) {
+                            Text("Nueva", color = TextPrimary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                        }
                     }
                 } else if (isStopped) {
                     Button(
@@ -386,7 +520,7 @@ fun AcousticSessionScreen(
                                 text = when(tutorialStep) {
                                     1 -> "1. Nivel Sonoro"
                                     2 -> "2. Dosis Acumulada"
-                                    3 -> "3. NIOSH vs OSHA"
+                                    3 -> "3. NIOSH, OSHA o ISO 9612"
                                     4 -> "4. Historial y Reportes"
                                     5 -> "5. Configuración"
                                     else -> "6. ¡Comenzar!"
@@ -398,7 +532,7 @@ fun AcousticSessionScreen(
                                 text = when(tutorialStep) {
                                     1 -> "Mide el Nivel de Presión Sonora en dB(A) simulando la respuesta del oído humano. Se pondrá naranja o rojo si la intensidad del ruido alcanza niveles perjudiciales para la salud."
                                     2 -> "Porcentaje de ruido seguro de tu día que ya has consumido. ¡Vibrará al llegar al 100%!"
-                                    3 -> "Este botón te permite cambiar la normativa de exposición al ruido. Sugerimos usar NIOSH (más estricto, límite 85dB) para mayor prevención, u OSHA si tu industria requiere dicho estándar legal (límite 90dB)."
+                                    3 -> "Este botón te permite cambiar la normativa de exposición al ruido. Sugerimos usar NIOSH (más estricto, límite 85dB) para mayor prevención, u OSHA si tu industria requiere dicho estándar legal (límite 90dB). Si quieres evaluarte con el estándar colombiano, elige ISO 9612. En las tres verás el porcentaje de tu dosis diaria (8 h) y puedes cambiar entre ellas en cualquier momento."
                                     4 -> "Aquí encontrarás tus sesiones pasadas. Tu historial dura para siempre guardado localmente (solo se borra si desinstalas la app). Podrás renombrar o compartir tus sesiones."
                                     5 -> "En este engranaje podrás ajustar la Calibración de Offset con un sonómetro patrón, aprender a interpretar tus resultados, o volver a ver este tutorial cuando lo desees."
                                     else -> "Toca COMENZAR para iniciar la medición. Al detenerla, usa 'Guardar sesión como' para almacenarla permanentemente."
@@ -582,7 +716,7 @@ fun LevelHistoryGraph(modifier: Modifier, levels: List<Float>, isRunning: Boolea
 }
 
 @Composable
-fun DoseCard(dose: Float, isNioshSelected: Boolean) {
+fun DoseCard(dose: Float, profileId: String) {
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -592,7 +726,7 @@ fun DoseCard(dose: Float, isNioshSelected: Boolean) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                 Text("Dosis Acumulada", color = TextPrimary, fontSize = 14.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.SemiBold)
-                Text(if (isNioshSelected) "NIOSH" else "OSHA", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(com.levelapp.core.dosimetry.RegulatoryProfile.byId(profileId).name.substringBefore(" REL").substringBefore(" PEL"), color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(4.dp))
             
@@ -615,20 +749,18 @@ fun DoseCard(dose: Float, isNioshSelected: Boolean) {
 }
 
 @Composable
-fun CriteriaToggleRow(isNioshSelected: Boolean, onSelect: (Boolean) -> Unit) {
+fun CriteriaToggleRow(selectedProfileId: String, onSelect: (String) -> Unit) {
+    val options = listOf("niosh" to "NIOSH", "osha" to "OSHA", "iso9612" to "ISO 9612")
     Row(Modifier.fillMaxWidth().height(48.dp).background(SurfaceCard, RoundedCornerShape(24.dp)).border(1.dp, BorderSoft, RoundedCornerShape(24.dp)).padding(4.dp)) {
-        Box(
-            modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(20.dp))
-                .background(if (isNioshSelected) PeriwinklePrimary else Color.Transparent)
-                .clickable { onSelect(true) }, 
-            contentAlignment = Alignment.Center
-        ) { Text("NIOSH", color = if (isNioshSelected) Color.White else TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold) }
-        Box(
-            modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(20.dp))
-                .background(if (!isNioshSelected) PeriwinklePrimary else Color.Transparent)
-                .clickable { onSelect(false) }, 
-            contentAlignment = Alignment.Center
-        ) { Text("OSHA", color = if (!isNioshSelected) Color.White else TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold) }
+        options.forEach { (id, label) ->
+            val selected = selectedProfileId == id
+            Box(
+                modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(20.dp))
+                    .background(if (selected) PeriwinklePrimary else Color.Transparent)
+                    .clickable { onSelect(id) },
+                contentAlignment = Alignment.Center
+            ) { Text(label, color = if (selected) Color.White else TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold) }
+        }
     }
 }
 
@@ -745,7 +877,7 @@ fun InterpretationDialog(onDismiss: () -> Unit) {
                         Text("Una dosis del 100% equivale a haber estado expuesto al límite máximo permitido para una jornada de 8 horas (que habitualmente es de 85 dBA, según la normativa local). Si el dosímetro marca más del 100%, significa que se ha superado el límite seguro y hay riesgo de hipoacusia (pérdida de audición).", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
                         Spacer(Modifier.height(12.dp))
                         Text("• Diferencias de Normativa", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
-                        Text("NIOSH establece el límite seguro en 85 dBA con una tasa de intercambio de 3 dB (si el ruido sube 3 dB, el tiempo máximo seguro se reduce a la mitad). OSHA es un criterio legal más permisivo que sitúa el límite en 90 dBA con intercambio de 5 dB.", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
+                        Text("NIOSH establece el límite seguro en 85 dBA con una tasa de intercambio de 3 dB (si el ruido sube 3 dB, el tiempo máximo seguro se reduce a la mitad). OSHA es un criterio legal más permisivo que sitúa el límite en 90 dBA con intercambio de 5 dB. ISO 9612 es el estándar usado en Colombia: límite de 85 dBA para 8 horas con intercambio de 3 dB, contando todo el ruido medido.", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
@@ -776,8 +908,8 @@ fun TutorialDialog(onDismiss: () -> Unit) {
                             Text("\nLa barra de dosis es lo más importante. Te dice qué porcentaje del ruido seguro de todo tu día ya has consumido. Si llega al 100%, tu teléfono vibrará avisando que estás en riesgo de daño auditivo.", color = TextSecondary, fontFamily = BricolageGrotesque)
                         }
                         2 -> Column {
-                            Text("3. NIOSH vs OSHA", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 18.sp)
-                            Text("\nPuedes elegir la norma bajo la que quieres evaluarte:\n\n• NIOSH: Límite 85dB. (Recomendado/Estricto)\n• OSHA: Límite 90dB. (Más permisivo)", color = TextSecondary, fontFamily = BricolageGrotesque)
+                            Text("3. NIOSH, OSHA o ISO 9612", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 18.sp)
+                            Text("\nPuedes elegir la norma bajo la que quieres evaluarte:\n\n• NIOSH: Límite 85dB. (Recomendado/Estricto)\n• OSHA: Límite 90dB. (Más permisivo)\n• ISO 9612: Si quieres mirar el estándar colombiano.", color = TextSecondary, fontFamily = BricolageGrotesque)
                         }
                         3 -> Column {
                             Text("4. Guardar y Exportar", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 18.sp)

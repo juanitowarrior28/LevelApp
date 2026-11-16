@@ -32,4 +32,17 @@ class NioshDoseCalculatorTest {
         val twa = DoseCalculator.twa(85.0, 8.0, profile)
         assertTrue(abs(twa - 85.0) < 0.5)
     }
+
+    @Test
+    fun `incremental dose never resets to zero during quiet periods below threshold`() {
+        var accumulatedDose = 0.0
+        // 5 minutes at 88 dBA (above 80 dBA threshold)
+        accumulatedDose += DoseCalculator.dosePercent(88.0, 5.0 / 60.0, profile)
+        val doseAfterLoudPeriod = accumulatedDose
+        assertTrue(doseAfterLoudPeriod > 0.0)
+
+        // Followed by 25 minutes at 54.7 dBA (below 80 dBA threshold)
+        accumulatedDose += DoseCalculator.dosePercent(54.7, 25.0 / 60.0, profile)
+        assertTrue(abs(accumulatedDose - doseAfterLoudPeriod) < 1e-9)
+    }
 }

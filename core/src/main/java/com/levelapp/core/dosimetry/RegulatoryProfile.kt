@@ -24,6 +24,38 @@ data class RegulatoryProfile(
             weighting = "A",
             averaging = "Slow",
         )
+
+        fun oshaDefault(): RegulatoryProfile = RegulatoryProfile(
+            id = "osha",
+            name = "OSHA PEL",
+            criterionDbA = 90.0,
+            exchangeRateDb = 5.0,
+            thresholdDbA = 80.0,
+            referenceHours = 8.0,
+            weighting = "A",
+            averaging = "Slow",
+        )
+
+        /**
+         * ISO 9612 (adoptada en Colombia como NTC-ISO 9612): principio de igual energía
+         * (tasa de intercambio 3 dB), nivel de referencia 85 dB(A) para 8 h y SIN umbral
+         * de integración (todo el sonido medido cuenta). La dosis % equivale a
+         * 100 · 10^((L_EX,8h − 85)/10).
+         */
+        fun iso9612Default(): RegulatoryProfile = RegulatoryProfile(
+            id = "iso9612",
+            name = "ISO 9612",
+            criterionDbA = 85.0,
+            exchangeRateDb = 3.0,
+            thresholdDbA = 0.0,
+            referenceHours = 8.0,
+            weighting = "A",
+            averaging = "Slow",
+        )
+
+        val all: List<RegulatoryProfile> by lazy { listOf(nioshDefault(), oshaDefault(), iso9612Default()) }
+
+        fun byId(id: String): RegulatoryProfile = all.firstOrNull { it.id == id } ?: nioshDefault()
     }
 }
 
@@ -38,11 +70,17 @@ object DoseCalculator {
         return dose * 100.0
     }
 
+    fun twaFromDose(dosePercent: Double, profile: RegulatoryProfile): Double {
+        val ratio = dosePercent / 100.0
+        if (ratio <= 0.0) return Double.NEGATIVE_INFINITY
+        val exchangeFactor = if (profile.exchangeRateDb == 3.0) 10.0 else profile.exchangeRateDb / log10(2.0)
+        return profile.criterionDbA + exchangeFactor * log10(ratio)
+    }
+
     fun twa(levelDbA: Double, durationHours: Double, profile: RegulatoryProfile): Double {
         if (durationHours <= 0.0) return Double.NEGATIVE_INFINITY
         val dose = dosePercent(levelDbA, durationHours, profile)
-        val ratio = dose / 100.0
-        return if (ratio <= 0.0) Double.NEGATIVE_INFINITY else profile.criterionDbA + 10.0 * log10(ratio)
+        return twaFromDose(dose, profile)
     }
 
     fun projectedDose8h(levelDbA: Double, durationHours: Double, profile: RegulatoryProfile): Double {

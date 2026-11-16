@@ -26,6 +26,7 @@ import com.levelapp.app.pdf.PdfReportExporter
 import com.levelapp.app.utils.ShareUtils
 import com.levelapp.app.viewmodel.AcousticSessionViewModel
 import com.levelapp.data.database.SessionEntity
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,6 +38,7 @@ fun HistoryScreen(
 ) {
     val allSessions by viewModel.allSessions.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showDeleteAllDialog by remember { mutableStateOf(false) }
 
     if (showDeleteAllDialog) {
@@ -94,7 +96,15 @@ fun HistoryScreen(
                             SessionCard(
                                 session = session,
                                 onDelete = { viewModel.deleteSession(session.id) },
-                                onRename = { id, title -> viewModel.renameSession(id, title) }
+                                onRename = { id, title -> viewModel.renameSession(id, title) },
+                                onShareCsv = {
+                                    scope.launch {
+                                        val points = viewModel.getSessionPoints(session.id)
+                                        val exporter = CsvReportExporter(context)
+                                        val file = exporter.generateSessionCsv(session, points)
+                                        ShareUtils.shareFile(context, file, "text/csv")
+                                    }
+                                }
                             )
                         }
                     }
@@ -105,7 +115,12 @@ fun HistoryScreen(
 }
 
 @Composable
-fun SessionCard(session: SessionEntity, onDelete: () -> Unit, onRename: (Long, String) -> Unit) {
+fun SessionCard(
+    session: SessionEntity,
+    onDelete: () -> Unit,
+    onRename: (Long, String) -> Unit,
+    onShareCsv: () -> Unit
+) {
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -154,9 +169,17 @@ fun SessionCard(session: SessionEntity, onDelete: () -> Unit, onRename: (Long, S
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(session.title, color = TextPrimary, fontSize = 16.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
-                    Text(dateStr, color = TextSecondary, fontSize = 12.sp)
+                    Text(dateStr, color = TextSecondary, fontSize = 12.sp, fontFamily = BricolageGrotesque)
+                    if (session.workerName.isNotBlank() || session.area.isNotBlank()) {
+                        Text(
+                            "${session.workerName}${if (session.workerRole.isNotBlank()) " (${session.workerRole})" else ""} • ${session.area}",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontFamily = BricolageGrotesque
+                        )
+                    }
                 }
                 
                 Box {
@@ -179,9 +202,7 @@ fun SessionCard(session: SessionEntity, onDelete: () -> Unit, onRename: (Long, S
                             text = { Text("Compartir CSV", color = TextPrimary) },
                             onClick = {
                                 expanded = false
-                                val exporter = CsvReportExporter(context)
-                                val file = exporter.generateSessionCsv(session)
-                                ShareUtils.shareFile(context, file, "text/csv")
+                                onShareCsv()
                             }
                         )
                         DropdownMenuItem(
@@ -189,7 +210,7 @@ fun SessionCard(session: SessionEntity, onDelete: () -> Unit, onRename: (Long, S
                             onClick = {
                                 expanded = false
                                 val exporter = PdfReportExporter(context)
-                                val file = exporter.generateSessionPdf(session.id.toString(), session.title)
+                                val file = exporter.generateSessionPdf(session)
                                 ShareUtils.shareFile(context, file, "application/pdf")
                             }
                         )
@@ -213,7 +234,12 @@ fun SessionCard(session: SessionEntity, onDelete: () -> Unit, onRename: (Long, S
                 }
                 Column {
                     Text("LAeq", color = TextSecondary, fontSize = 12.sp)
-                    Text("${"%.1f".format(session.laeq)} dB", color = TextPrimary, fontWeight = FontWeight.Bold)
+                    Text("${"%.1f".format(session.laeq)} dBA", color = TextPrimary, fontWeight = FontWeight.Bold)
+                }
+                Column {
+                    Text("SEL / SZL", color = TextSecondary, fontSize = 12.sp)
+                    val selVal = if (session.sel > 0.0) session.sel else session.laeq
+                    Text("${"%.1f".format(selVal)} dBA", color = TextPrimary, fontWeight = FontWeight.Bold)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Dosis", color = TextSecondary, fontSize = 12.sp)
