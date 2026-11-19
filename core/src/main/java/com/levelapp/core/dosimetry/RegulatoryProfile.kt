@@ -14,6 +14,10 @@ data class RegulatoryProfile(
     val averaging: String = "Slow",
 ) {
     companion object {
+        /**
+         * NIOSH REL (1998): Criterio 85 dB(A) para 8 h, tasa de intercambio 3 dB,
+         * umbral de integración 80 dB(A).
+         */
         fun nioshDefault(): RegulatoryProfile = RegulatoryProfile(
             id = "niosh",
             name = "NIOSH REL",
@@ -25,9 +29,31 @@ data class RegulatoryProfile(
             averaging = "Slow",
         )
 
-        fun oshaDefault(): RegulatoryProfile = RegulatoryProfile(
+        /**
+         * OSHA PEL (29 CFR 1910.95 Table G-16): Límite legal permisible con criterio 90 dB(A)
+         * para 8 h, tasa de intercambio 5 dB y umbral de integración de 90 dB(A).
+         */
+        fun oshaPelDefault(): RegulatoryProfile = RegulatoryProfile(
             id = "osha",
             name = "OSHA PEL",
+            criterionDbA = 90.0,
+            exchangeRateDb = 5.0,
+            thresholdDbA = 90.0,
+            referenceHours = 8.0,
+            weighting = "A",
+            averaging = "Slow",
+        )
+
+        fun oshaDefault(): RegulatoryProfile = oshaPelDefault()
+
+        /**
+         * OSHA HC (29 CFR 1910.95 Hearing Conservation Amendment / Action Level):
+         * Criterio de 100% dosis en 90 dB(A) (50% dosis = 85 dB(A) Action Level),
+         * tasa de intercambio 5 dB y umbral de integración de 80 dB(A).
+         */
+        fun oshaHcDefault(): RegulatoryProfile = RegulatoryProfile(
+            id = "osha_hc",
+            name = "OSHA HC",
             criterionDbA = 90.0,
             exchangeRateDb = 5.0,
             thresholdDbA = 80.0,
@@ -37,10 +63,9 @@ data class RegulatoryProfile(
         )
 
         /**
-         * ISO 9612 (adoptada en Colombia como NTC-ISO 9612): principio de igual energía
-         * (tasa de intercambio 3 dB), nivel de referencia 85 dB(A) para 8 h y SIN umbral
-         * de integración (todo el sonido medido cuenta). La dosis % equivale a
-         * 100 · 10^((L_EX,8h − 85)/10).
+         * ISO 9612 (Método internacional de ingeniería para determinación de L_EX,8h):
+         * Principio de igual energía (tasa de intercambio 3 dB), nivel de referencia 85 dB(A)
+         * para 8 h y sin umbral de corte (threshold 0 dB(A): integra toda la energía acústica).
          */
         fun iso9612Default(): RegulatoryProfile = RegulatoryProfile(
             id = "iso9612",
@@ -53,9 +78,39 @@ data class RegulatoryProfile(
             averaging = "Slow",
         )
 
-        val all: List<RegulatoryProfile> by lazy { listOf(nioshDefault(), oshaDefault(), iso9612Default()) }
+        /**
+         * Resolución 1792 de 1990 (Colombia - Ministerios de Trabajo y Salud):
+         * Límite permisible de 85 dB(A) para 8 h con tasa de intercambio de 5 dB
+         * (85 dBA -> 8h, 90 dBA -> 4h, 95 dBA -> 2h, 100 dBA -> 1h) y umbral de 80 dB(A).
+         */
+        fun colombiaRes1792Default(): RegulatoryProfile = RegulatoryProfile(
+            id = "col_res1792",
+            name = "Res. 1792 (Col)",
+            criterionDbA = 85.0,
+            exchangeRateDb = 5.0,
+            thresholdDbA = 80.0,
+            referenceHours = 8.0,
+            weighting = "A",
+            averaging = "Slow",
+        )
 
-        fun byId(id: String): RegulatoryProfile = all.firstOrNull { it.id == id } ?: nioshDefault()
+        val all: List<RegulatoryProfile> by lazy {
+            listOf(
+                nioshDefault(),
+                oshaPelDefault(),
+                oshaHcDefault(),
+                iso9612Default(),
+                colombiaRes1792Default()
+            )
+        }
+
+        fun byId(id: String): RegulatoryProfile = when (id) {
+            "osha_pel", "osha" -> oshaPelDefault()
+            "osha_hc" -> oshaHcDefault()
+            "iso9612" -> iso9612Default()
+            "col_res1792" -> colombiaRes1792Default()
+            else -> all.firstOrNull { it.id == id } ?: nioshDefault()
+        }
     }
 }
 

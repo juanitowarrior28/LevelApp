@@ -230,14 +230,14 @@ fun SessionCard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Text("Perfil", color = TextSecondary, fontSize = 12.sp)
-                    Text(session.profileId.uppercase(), color = PeriwinklePrimary, fontWeight = FontWeight.Bold)
+                    Text(com.levelapp.core.dosimetry.RegulatoryProfile.byId(session.profileId).name, color = PeriwinklePrimary, fontWeight = FontWeight.Bold)
                 }
                 Column {
                     Text("LAeq", color = TextSecondary, fontSize = 12.sp)
                     Text("${"%.1f".format(session.laeq)} dBA", color = TextPrimary, fontWeight = FontWeight.Bold)
                 }
                 Column {
-                    Text("SEL / SZL", color = TextSecondary, fontSize = 12.sp)
+                    Text("SEL (LAE)", color = TextSecondary, fontSize = 12.sp)
                     val selVal = if (session.sel > 0.0) session.sel else session.laeq
                     Text("${"%.1f".format(selVal)} dBA", color = TextPrimary, fontWeight = FontWeight.Bold)
                 }

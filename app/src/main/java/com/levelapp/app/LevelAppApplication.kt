@@ -20,7 +20,11 @@ class LevelAppApplication : Application() {
             AcousticDatabase::class.java,
             "acoustic_db"
         )
-            .addMigrations(AcousticDatabase.MIGRATION_1_2, AcousticDatabase.MIGRATION_2_3)
+            .addMigrations(
+                AcousticDatabase.MIGRATION_1_2,
+                AcousticDatabase.MIGRATION_2_3,
+                AcousticDatabase.MIGRATION_3_4
+            )
             .fallbackToDestructiveMigration()
             .build()
         sessionRepository = SessionRepositoryImpl(database.acousticSessionDao())

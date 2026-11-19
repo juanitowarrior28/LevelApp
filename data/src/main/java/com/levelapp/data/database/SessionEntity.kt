@@ -28,7 +28,9 @@ data class SessionEntity(
     val dosePercent: Double = 0.0,
     val doseNiosh: Double = 0.0,
     val doseOsha: Double = 0.0,
+    val doseOshaHc: Double = 0.0,
     val doseIso: Double = 0.0,
+    val doseColRes1792: Double = 0.0,
     val notes: String = "",
 )
 
@@ -49,5 +51,7 @@ data class MeasurementPointEntity(
     val dosePercent: Double,
     val doseNiosh: Double = 0.0,
     val doseOsha: Double = 0.0,
+    val doseOshaHc: Double = 0.0,
     val doseIso: Double = 0.0,
+    val doseColRes1792: Double = 0.0,
 )

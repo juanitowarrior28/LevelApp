@@ -51,8 +51,6 @@ class CsvReportExporter(private val context: Context) {
         val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
-        // Si es una sesión antigua sin puntos guardados en la tabla, reconstruimos la progresión
-        // paso a paso con la misma regla adaptativa para que siempre se vean las filas hacia abajo.
         val effectivePoints = if (points.isNotEmpty()) {
             points
         } else {
@@ -71,7 +69,6 @@ class CsvReportExporter(private val context: Context) {
         }
 
         OutputStreamWriter(FileOutputStream(outputFile), StandardCharsets.UTF_8).use { writer ->
-            // Sin BOM (\uFEFF) y con encabezados limpios para que visores de hojas de calculo en Android no muestren caracteres raros
             writer.write("REPORTE Y SERIE TEMPORAL DE DOSIMETRIA ACUSTICA - LEVELAPP\n")
             writer.write("Parametro,Valor,Unidad / Detalle\n")
             writer.write("ID Sesion,${session.id},Identificador unico\n")
@@ -84,12 +81,13 @@ class CsvReportExporter(private val context: Context) {
             writer.write("Hora de inicio,${timeFmt.format(Date(startMs))},HH:MM:SS\n")
             writer.write("Hora de finalizacion,${timeFmt.format(Date(endMs))},HH:MM:SS\n")
             writer.write("Duracion efectiva,${formatHmsFull(durationSec)},${"%.2f".format(Locale.US, durationSec)} s (${"%.4f".format(Locale.US, durationHours)} h)\n")
-            writer.write("Normativa principal,${profile.name},Criterio ${profile.criterionDbA} dBA / 8h / Tasa ${profile.exchangeRateDb} dB\n")
+            writer.write("Rango dinamico del sistema,35.0 - 110.0,dB(A) (Ponderacion A IEC 61672)\n")
+            writer.write("Criterio principal,${profile.name},Criterio ${profile.criterionDbA} dBA / 8h / Tasa ${profile.exchangeRateDb} dB / Umbral ${profile.thresholdDbA} dBA\n")
             writer.write("LAeq_T (Promedio energetico),${fmt(session.laeq)},dBA\n")
-            writer.write("SEL / SZL (LAE - Nivel de Exposicion Sonora),${fmt(selValue)},dBA (Energia integrada a 1 s)\n")
+            writer.write("SEL (LAE - Nivel de Exposicion Sonora),${fmt(selValue)},dBA (Energia ponderada A integrada a 1 s)\n")
             writer.write("LEX_8h / TWA (Nivel diario equivalente 8h),${fmt(session.twa)},dBA\n")
             writer.write("Exposicion sonora (EA - ISO 9612),${"%.4f".format(Locale.US, soundExposurePa2h)},Pa^2*h (1.01 Pa^2*h = 100% a 85 dBA)\n")
-            writer.write("LASmax / Pico ponderado A,${fmt(session.lasMax)},dBA (Maximo registrado)\n")
+            writer.write("LASmax,${fmt(session.lasMax)},dBA (Maximo registrado)\n")
             writer.write("LASmin,${fmt(lasMinValue)},dBA (Minimo registrado)\n")
             writer.write("Percentil L10 (Picos frecuentes),${fmt(if (session.l10 > 0) session.l10 else session.lasMax)},dBA (Superado el 10% del tiempo)\n")
             writer.write("Percentil L50 (Mediana acustica),${fmt(if (session.l50 > 0) session.l50 else session.laeq)},dBA (Superado el 50% del tiempo)\n")
@@ -97,18 +95,20 @@ class CsvReportExporter(private val context: Context) {
             writer.write("Dosis Acumulada (${profile.name}),${fmt(session.dosePercent)},% de la jornada de 8h\n")
             writer.write("Porcentaje Restante de Exposicion Permitida,${fmt(remainingDose)},% disponible antes del limite del 100%\n")
             writer.write("Dosis Proyectada a 8 horas,${fmt(projectedDose8h)},% estimado manteniendo el ritmo actual\n")
-            writer.write("Dosis bajo NIOSH (85 dBA / 3 dB),${fmt(if (session.doseNiosh > 0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent)},%\n")
-            writer.write("Dosis bajo OSHA (90 dBA / 5 dB),${fmt(if (session.doseOsha > 0 || session.profileId != "osha") session.doseOsha else session.dosePercent)},%\n")
-            writer.write("Dosis bajo ISO 9612 Colombia (85 dBA / 3 dB),${fmt(if (session.doseIso > 0 || session.profileId != "iso9612") session.doseIso else session.dosePercent)},%\n")
+            writer.write("Dosis bajo NIOSH REL (85 dBA / 3 dB / umbral 80 dBA),${fmt(if (session.doseNiosh > 0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent)},%\n")
+            writer.write("Dosis bajo OSHA PEL (90 dBA / 5 dB / umbral 90 dBA),${fmt(if (session.doseOsha > 0 || session.profileId != "osha") session.doseOsha else session.dosePercent)},%\n")
+            writer.write("Dosis bajo OSHA HC (90 dBA / 5 dB / umbral 80 dBA),${fmt(if (session.doseOshaHc > 0 || session.profileId != "osha_hc") session.doseOshaHc else session.dosePercent)},%\n")
+            writer.write("Dosis bajo ISO 9612 (85 dBA / 3 dB / sin umbral),${fmt(if (session.doseIso > 0 || session.profileId != "iso9612") session.doseIso else session.dosePercent)},%\n")
+            writer.write("Dosis bajo Res. 1792/1990 Colombia (85 dBA / 5 dB / umbral 80 dBA),${fmt(if (session.doseColRes1792 > 0 || session.profileId != "col_res1792") session.doseColRes1792 else session.dosePercent)},%\n")
             writer.write("Resolucion de la tabla temporal,${csvEscape(resolutionDescription)},Agrupacion adaptativa segun duracion\n")
             writer.write("Observaciones,${csvEscape(session.notes.ifBlank { "Sin observaciones" })},Notas del evaluador\n")
             writer.write("\n")
 
             writer.write("PROGRESION TEMPORAL PASO A PASO (FILAS HACIA ABAJO SEGUN DURACION)\n")
             writer.write(
-                "Muestra_N,Rango_Tiempo,Hora,Nivel_dBA,LAeq_Acum_dBA,SEL_SZL_Acum_dBA," +
-                    "Dosis_Acum_%,Restante_%,TWA_Acum_dBA,Min_Rango_dBA,Max_Rango_dBA,SEL_SZL_Rango_dBA," +
-                    "Dosis_NIOSH_%,Dosis_OSHA_%,Dosis_ISO9612_%\n"
+                "Muestra_N,Rango_Tiempo,Hora,Nivel_dBA,LAeq_Acum_dBA,SEL_LAE_Acum_dBA," +
+                    "Dosis_Acum_%,Restante_%,TWA_Acum_dBA,Min_Rango_dBA,Max_Rango_dBA,SEL_LAE_Rango_dBA," +
+                    "Dosis_NIOSH_%,Dosis_OSHA_PEL_%,Dosis_OSHA_HC_%,Dosis_ISO9612_%,Dosis_Res1792_Col_%\n"
             )
 
             val useHoursInRange = durationSec >= 3600.0
@@ -145,17 +145,15 @@ class CsvReportExporter(private val context: Context) {
                         "${fmt(sliceSel)}," +
                         "${fmt(pt.doseNiosh)}," +
                         "${fmt(pt.doseOsha)}," +
-                        "${fmt(pt.doseIso)}\n"
+                        "${fmt(pt.doseOshaHc)}," +
+                        "${fmt(pt.doseIso)}," +
+                        "${fmt(pt.doseColRes1792)}\n"
                 )
             }
         }
         return outputFile
     }
 
-    /**
-     * Genera las filas paso a paso para sesiones guardadas con versiones anteriores
-     * usando la misma ventana adaptativa (1s para <=3 min, 5s para <=15 min, etc.).
-     */
     private fun buildFallbackProgressionPoints(
         session: SessionEntity,
         totalDurationSec: Double
@@ -173,8 +171,10 @@ class CsvReportExporter(private val context: Context) {
         val list = ArrayList<MeasurementPointEntity>(numSteps)
 
         val totalNiosh = if (session.doseNiosh > 0.0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent
-        val totalOsha = if (session.doseOsha > 0.0 || session.profileId != "osha") session.doseOsha else session.dosePercent
+        val totalOshaPel = if (session.doseOsha > 0.0 || session.profileId != "osha") session.doseOsha else session.dosePercent
+        val totalOshaHc = if (session.doseOshaHc > 0.0 || session.profileId != "osha_hc") session.doseOshaHc else session.dosePercent
         val totalIso = if (session.doseIso > 0.0 || session.profileId != "iso9612") session.doseIso else session.dosePercent
+        val totalCol = if (session.doseColRes1792 > 0.0 || session.profileId != "col_res1792") session.doseColRes1792 else session.dosePercent
         val minVal = if (session.lasMin > 0.0) session.lasMin else session.laeq
 
         for (i in 0 until numSteps) {
@@ -202,8 +202,10 @@ class CsvReportExporter(private val context: Context) {
                     twa = cumTwa,
                     dosePercent = cumDose,
                     doseNiosh = totalNiosh * fraction,
-                    doseOsha = totalOsha * fraction,
+                    doseOsha = totalOshaPel * fraction,
+                    doseOshaHc = totalOshaHc * fraction,
                     doseIso = totalIso * fraction,
+                    doseColRes1792 = totalCol * fraction,
                 )
             )
         }
@@ -220,11 +222,6 @@ class CsvReportExporter(private val context: Context) {
         return "\"${clean.replace("\"", "\"\"")}\""
     }
 
-    /**
-     * Formato corto para que la columna Rango_Tiempo nunca se corte en pantallas móviles:
-     * - Menos de 1 hora: "mm:ss" (ej. "00:00 a 00:01", "00:01 a 00:02")
-     * - 1 hora o más: "HH:mm:ss"
-     */
     private fun formatCompactTime(seconds: Double, includeHours: Boolean): String {
         val total = ceil(seconds - 1e-4).toLong().coerceAtLeast(0L)
         val h = total / 3600L

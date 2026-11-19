@@ -1,17 +1,19 @@
 # Dosimetría ocupacional
 
-Se implementa el perfil `NIOSH REL` con criterio de 85 dBA durante 8 horas, exchange rate de 3 dB y threshold de 80 dBA. En este enfoque, la dosis acumulada se calcula sobre la energía sonora efectiva dentro del periodo medido y se expresa como porcentaje respecto del criterio de referencia.
+El motor de dosimetría integra la exposición en bloques discretos de $\Delta t = 100\text{ ms}$ dentro de un rango operativo unificado de **35.0 a 110.0 dB(A)** (acorde con la referencia de fondo de escala digital $0\text{ dBFS} \equiv 100\text{ dB SPL}$, el piso de ruido propio de micrófonos MEMS y su punto de sobrecarga acústica).
 
-La fórmula aplicada para un nivel continuo de exposición es:
+Se implementan cinco perfiles en paralelo (`RegulatoryProfile`):
 
-- Dosis% = 100 * (T / Tref) * 2^((L - C) / exchangeRate)
+- **NIOSH REL**: criterio $85.0\text{ dB(A)}$ / $8\text{ h}$, tasa de intercambio $q = 3.0\text{ dB}$, umbral $L_{\text{th}} = 80.0\text{ dB(A)}$.
+- **OSHA PEL** (*29 CFR 1910.95 Table G-16*): criterio $90.0\text{ dB(A)}$ / $8\text{ h}$, tasa de intercambio $q = 5.0\text{ dB}$, umbral $L_{\text{th}} = 90.0\text{ dB(A)}$.
+- **OSHA HC** (*29 CFR 1910.95 Hearing Conservation / Action Level*): criterio $90.0\text{ dB(A)}$ / $8\text{ h}$ ($50\%\text{ dosis} = 85\text{ dB(A)}$), tasa de intercambio $q = 5.0\text{ dB}$, umbral $L_{\text{th}} = 80.0\text{ dB(A)}$.
+- **ISO 9612**: método internacional de determinación de $L_{\text{EX,8h}}$ con referencia $85.0\text{ dB(A)}$ / $8\text{ h}$, tasa de intercambio $q = 3.0\text{ dB}$, sin umbral ($L_{\text{th}} = 0.0\text{ dB(A)}$).
+- **Res. 1792 (Col)** (*Resolución 1792 de 1990 - Colombia*): criterio $85.0\text{ dB(A)}$ / $8\text{ h}$, tasa de intercambio $q = 5.0\text{ dB}$, umbral $L_{\text{th}} = 80.0\text{ dB(A)}$.
 
-Donde:
+La fórmula incremental aplicada en cada intervalo $\Delta t_k$ (en horas) es:
 
-- `T`: duración medida
-- `Tref`: duración de referencia del perfil (8 h)
-- `L`: nivel de exposición medido en dBA
-- `C`: criterio del perfil
-- `exchangeRate`: tasa de intercambio del perfil
+- $\Delta\text{Dosis}\% = 100 \cdot (\Delta t_k / T_{\text{ref}}) \cdot 2^{(L_k - L_c) / q}$ si $L_k \ge L_{\text{th}}$, o $0\%$ si $L_k < L_{\text{th}}$.
 
-El valor de TWA se deriva a partir del porcentaje de dosis acumulada y se mantiene separado del calculador de energía de la señal.
+El Nivel de Exposición Sonora ponderado A se reporta exclusivamente como **$\text{SEL}$ ($L_{\text{AE}}$)**:
+
+- $\text{SEL} = L_{\text{AE}} = L_{\text{Aeq},T} + 10 \log_{10}(T_{\text{seg}} / 1\text{ s})$.

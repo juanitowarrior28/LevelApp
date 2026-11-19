@@ -520,7 +520,7 @@ fun AcousticSessionScreen(
                                 text = when(tutorialStep) {
                                     1 -> "1. Nivel Sonoro"
                                     2 -> "2. Dosis Acumulada"
-                                    3 -> "3. NIOSH, OSHA o ISO 9612"
+                                    3 -> "3. Perfiles y Normativas"
                                     4 -> "4. Historial y Reportes"
                                     5 -> "5. Configuración"
                                     else -> "6. ¡Comenzar!"
@@ -532,7 +532,7 @@ fun AcousticSessionScreen(
                                 text = when(tutorialStep) {
                                     1 -> "Mide el Nivel de Presión Sonora en dB(A) simulando la respuesta del oído humano. Se pondrá naranja o rojo si la intensidad del ruido alcanza niveles perjudiciales para la salud."
                                     2 -> "Porcentaje de ruido seguro de tu día que ya has consumido. ¡Vibrará al llegar al 100%!"
-                                    3 -> "Este botón te permite cambiar la normativa de exposición al ruido. Sugerimos usar NIOSH (más estricto, límite 85dB) para mayor prevención, u OSHA si tu industria requiere dicho estándar legal (límite 90dB). Si quieres evaluarte con el estándar colombiano, elige ISO 9612. En las tres verás el porcentaje de tu dosis diaria (8 h) y puedes cambiar entre ellas en cualquier momento."
+                                    3 -> "Elige el perfil de evaluación: NIOSH REL (85 dBA, q=3 dB, umbral 80 dBA), OSHA PEL (90 dBA, q=5 dB, umbral 90 dBA), OSHA HC (90 dBA, q=5 dB, umbral 80 dBA), ISO 9612 (método L_EX,8h: 85 dBA, q=3 dB, sin umbral) o Res. 1792 (norma legal colombiana: 85 dBA, q=5 dB, umbral 80 dBA). Todos se calculan en paralelo en porcentaje de dosis (8 h)."
                                     4 -> "Aquí encontrarás tus sesiones pasadas. Tu historial dura para siempre guardado localmente (solo se borra si desinstalas la app). Podrás renombrar o compartir tus sesiones."
                                     5 -> "En este engranaje podrás ajustar la Calibración de Offset con un sonómetro patrón, aprender a interpretar tus resultados, o volver a ver este tutorial cuando lo desees."
                                     else -> "Toca COMENZAR para iniciar la medición. Al detenerla, usa 'Guardar sesión como' para almacenarla permanentemente."
@@ -726,7 +726,7 @@ fun DoseCard(dose: Float, profileId: String) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                 Text("Dosis Acumulada", color = TextPrimary, fontSize = 14.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.SemiBold)
-                Text(com.levelapp.core.dosimetry.RegulatoryProfile.byId(profileId).name.substringBefore(" REL").substringBefore(" PEL"), color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(com.levelapp.core.dosimetry.RegulatoryProfile.byId(profileId).name, color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(4.dp))
             
@@ -750,7 +750,13 @@ fun DoseCard(dose: Float, profileId: String) {
 
 @Composable
 fun CriteriaToggleRow(selectedProfileId: String, onSelect: (String) -> Unit) {
-    val options = listOf("niosh" to "NIOSH", "osha" to "OSHA", "iso9612" to "ISO 9612")
+    val options = listOf(
+        "niosh" to "NIOSH",
+        "osha" to "OSHA PEL",
+        "osha_hc" to "OSHA HC",
+        "iso9612" to "ISO 9612",
+        "col_res1792" to "RES 1792"
+    )
     Row(Modifier.fillMaxWidth().height(48.dp).background(SurfaceCard, RoundedCornerShape(24.dp)).border(1.dp, BorderSoft, RoundedCornerShape(24.dp)).padding(4.dp)) {
         options.forEach { (id, label) ->
             val selected = selectedProfileId == id
@@ -759,7 +765,15 @@ fun CriteriaToggleRow(selectedProfileId: String, onSelect: (String) -> Unit) {
                     .background(if (selected) PeriwinklePrimary else Color.Transparent)
                     .clickable { onSelect(id) },
                 contentAlignment = Alignment.Center
-            ) { Text(label, color = if (selected) Color.White else TextSecondary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold) }
+            ) {
+                Text(
+                    label,
+                    color = if (selected) Color.White else TextSecondary,
+                    fontFamily = BricolageGrotesque,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+            }
         }
     }
 }
@@ -876,8 +890,8 @@ fun InterpretationDialog(onDismiss: () -> Unit) {
                         Text("• Criterio de evaluación", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
                         Text("Una dosis del 100% equivale a haber estado expuesto al límite máximo permitido para una jornada de 8 horas (que habitualmente es de 85 dBA, según la normativa local). Si el dosímetro marca más del 100%, significa que se ha superado el límite seguro y hay riesgo de hipoacusia (pérdida de audición).", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
                         Spacer(Modifier.height(12.dp))
-                        Text("• Diferencias de Normativa", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
-                        Text("NIOSH establece el límite seguro en 85 dBA con una tasa de intercambio de 3 dB (si el ruido sube 3 dB, el tiempo máximo seguro se reduce a la mitad). OSHA es un criterio legal más permisivo que sitúa el límite en 90 dBA con intercambio de 5 dB. ISO 9612 es el estándar usado en Colombia: límite de 85 dBA para 8 horas con intercambio de 3 dB, contando todo el ruido medido.", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
+                        Text("• Diferencias de Normativa y Perfiles", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
+                        Text("• NIOSH REL: Límite 85 dBA / 8h, tasa de intercambio 3 dB y umbral 80 dBA.\n• OSHA PEL: Límite permisible de 90 dBA / 8h, tasa de intercambio 5 dB y umbral de integración 90 dBA.\n• OSHA HC: Conservación auditiva (Action Level 50% = 85 dBA) con criterio 90 dBA, intercambio 5 dB y umbral 80 dBA.\n• ISO 9612: Método internacional de integración de energía (L_EX,8h) con referencia 85 dBA / 8h, intercambio 3 dB y sin umbral.\n• Res. 1792 (Colombia): Norma legal colombiana (Resolución 1792 de 1990) con límite 85 dBA / 8h, intercambio de 5 dB y umbral 80 dBA.", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
@@ -908,8 +922,8 @@ fun TutorialDialog(onDismiss: () -> Unit) {
                             Text("\nLa barra de dosis es lo más importante. Te dice qué porcentaje del ruido seguro de todo tu día ya has consumido. Si llega al 100%, tu teléfono vibrará avisando que estás en riesgo de daño auditivo.", color = TextSecondary, fontFamily = BricolageGrotesque)
                         }
                         2 -> Column {
-                            Text("3. NIOSH, OSHA o ISO 9612", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 18.sp)
-                            Text("\nPuedes elegir la norma bajo la que quieres evaluarte:\n\n• NIOSH: Límite 85dB. (Recomendado/Estricto)\n• OSHA: Límite 90dB. (Más permisivo)\n• ISO 9612: Si quieres mirar el estándar colombiano.", color = TextSecondary, fontFamily = BricolageGrotesque)
+                            Text("3. Perfiles y Normativas", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 18.sp)
+                            Text("\nPuedes elegir el criterio bajo el que quieres evaluarte:\n\n• NIOSH REL: 85 dBA / q=3 dB / umbral 80 dBA\n• OSHA PEL: 90 dBA / q=5 dB / umbral 90 dBA\n• OSHA HC: 90 dBA / q=5 dB / umbral 80 dBA\n• ISO 9612: Método L_EX,8h (85 dBA / q=3 dB / sin umbral)\n• Res. 1792 (Col): Norma legal colombiana (85 dBA / q=5 dB / umbral 80 dBA)", color = TextSecondary, fontFamily = BricolageGrotesque)
                         }
                         3 -> Column {
                             Text("4. Guardar y Exportar", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 18.sp)

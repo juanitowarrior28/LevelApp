@@ -248,6 +248,6 @@ class AcousticForegroundService : Service() {
         private const val BLOCK_SAMPLES = SAMPLE_RATE / 10 // bloques de 100 ms
         private const val WARMUP_SAMPLES = SAMPLE_RATE / 2  // descarta 500 ms al arrancar el micrófono
         private const val MIN_DB = 35.0
-        private const val MAX_DB = 130.0
+        private const val MAX_DB = 110.0
     }
 }

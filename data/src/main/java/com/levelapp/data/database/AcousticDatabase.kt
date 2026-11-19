@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SessionEntity::class, MeasurementPointEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AcousticDatabase : RoomDatabase() {
@@ -40,6 +40,15 @@ abstract class AcousticDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE measurement_points ADD COLUMN doseNiosh REAL NOT NULL DEFAULT 0.0")
                 db.execSQL("ALTER TABLE measurement_points ADD COLUMN doseOsha REAL NOT NULL DEFAULT 0.0")
                 db.execSQL("ALTER TABLE measurement_points ADD COLUMN doseIso REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sessions ADD COLUMN doseOshaHc REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE sessions ADD COLUMN doseColRes1792 REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE measurement_points ADD COLUMN doseOshaHc REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE measurement_points ADD COLUMN doseColRes1792 REAL NOT NULL DEFAULT 0.0")
             }
         }
     }

@@ -15,7 +15,7 @@ import kotlin.math.pow
 /**
  * Representa un intervalo de tiempo [startEpochMs, startEpochMs + durationSeconds]
  * con integración energética exacta (10^(L/10)*dt) para que al promediar o compactar
- * rangos en sesiones largas el cálculo de LAeq y SEL/SZL sea 100% estadísticamente exacto.
+ * rangos en sesiones largas el cálculo de LAeq y SEL (LAE) sea 100% estadísticamente exacto.
  */
 data class AcousticTimeSlice(
     val startEpochMs: Long,
@@ -25,8 +25,10 @@ data class AcousticTimeSlice(
     val minDbA: Double,
     val maxDbA: Double,
     val doseNioshInc: Double,
-    val doseOshaInc: Double,
+    val doseOshaPelInc: Double,
+    val doseOshaHcInc: Double,
     val doseIsoInc: Double,
+    val doseColRes1792Inc: Double,
 ) {
     fun mergeWith(next: AcousticTimeSlice): AcousticTimeSlice = AcousticTimeSlice(
         startEpochMs = startEpochMs,
@@ -36,8 +38,10 @@ data class AcousticTimeSlice(
         minDbA = minOf(minDbA, next.minDbA),
         maxDbA = maxOf(maxDbA, next.maxDbA),
         doseNioshInc = doseNioshInc + next.doseNioshInc,
-        doseOshaInc = doseOshaInc + next.doseOshaInc,
+        doseOshaPelInc = doseOshaPelInc + next.doseOshaPelInc,
+        doseOshaHcInc = doseOshaHcInc + next.doseOshaHcInc,
         doseIsoInc = doseIsoInc + next.doseIsoInc,
+        doseColRes1792Inc = doseColRes1792Inc + next.doseColRes1792Inc,
     )
 }
 
@@ -73,12 +77,13 @@ object AudioDataStream {
     private var lastPersistedMs = 0L
     private val historyBuffer = ArrayDeque<Float>(HISTORY_SIZE + 1)
 
-    // Histograma de 0.1 dB entre 30.0 y 129.9 dBA (1000 bins = 8 KB de RAM fijos para 8h+)
-    private val histogramSeconds = DoubleArray(1000)
+    // Histograma de 0.1 dB sobre el rango dinámico de medición [35.0, 110.0] dB(A) (751 bins)
+    private const val HIST_MIN_DB = 35.0
+    private val histogramSeconds = DoubleArray(751)
 
     // Serie temporal auto-compactable para el CSV
     private val timeSlices = ArrayList<AcousticTimeSlice>(MAX_TIME_SLICES + 2)
-    private var sliceTargetSeconds = 1.0 // Inicia muestra a muestra cada 1.0 s; se duplica si pasa de 1800 intervalos
+    private var sliceTargetSeconds = 1.0
     private var currentSliceStartEpochMs = 0L
     private var currentSliceElapsedStart = 0.0
     private var currentSliceDuration = 0.0
@@ -86,8 +91,10 @@ object AudioDataStream {
     private var currentSliceMin = Double.POSITIVE_INFINITY
     private var currentSliceMax = 0.0
     private var currentSliceDoseNiosh = 0.0
-    private var currentSliceDoseOsha = 0.0
+    private var currentSliceDoseOshaPel = 0.0
+    private var currentSliceDoseOshaHc = 0.0
     private var currentSliceDoseIso = 0.0
+    private var currentSliceDoseCol = 0.0
 
     @Synchronized
     fun init(context: Context) {
@@ -139,7 +146,9 @@ object AudioDataStream {
                 dose = accumulatedDose[profileId] ?: 0.0,
                 doseNiosh = accumulatedDose["niosh"] ?: 0.0,
                 doseOsha = accumulatedDose["osha"] ?: 0.0,
+                doseOshaHc = accumulatedDose["osha_hc"] ?: 0.0,
                 doseIso = accumulatedDose["iso9612"] ?: 0.0,
+                doseColRes1792 = accumulatedDose["col_res1792"] ?: 0.0,
                 durationMinutes = measuredSeconds / 60.0,
                 status = savedStatus,
                 savedSessionId = null,
@@ -177,10 +186,6 @@ object AudioDataStream {
         return DoseCalculator.twaFromDose(dose, RegulatoryProfile.byId(profileId)).let { if (it.isFinite()) it else 0.0 }
     }
 
-    /**
-     * Calcula el percentil L_N (nivel superado el N% del tiempo, ej. L10, L50, L90)
-     * a partir del histograma temporal de 0.1 dB.
-     */
     private fun computePercentileExceeded(exceedPercent: Double): Double {
         if (measuredSeconds <= 0.0) return 0.0
         val targetSecondsFromTop = measuredSeconds * (exceedPercent / 100.0)
@@ -188,10 +193,10 @@ object AudioDataStream {
         for (bin in histogramSeconds.indices.reversed()) {
             cumulativeFromTop += histogramSeconds[bin]
             if (cumulativeFromTop >= targetSecondsFromTop) {
-                return 30.0 + bin * 0.1
+                return HIST_MIN_DB + bin * 0.1
             }
         }
-        return 30.0
+        return HIST_MIN_DB
     }
 
     private fun resetCurrentSlice(nowMs: Long, elapsedStart: Double) {
@@ -202,8 +207,10 @@ object AudioDataStream {
         currentSliceMin = Double.POSITIVE_INFINITY
         currentSliceMax = 0.0
         currentSliceDoseNiosh = 0.0
-        currentSliceDoseOsha = 0.0
+        currentSliceDoseOshaPel = 0.0
+        currentSliceDoseOshaHc = 0.0
         currentSliceDoseIso = 0.0
+        currentSliceDoseCol = 0.0
     }
 
     private fun commitCurrentSliceIfNotEmpty() {
@@ -217,8 +224,10 @@ object AudioDataStream {
                 minDbA = if (currentSliceMin.isFinite()) currentSliceMin else currentSliceMax,
                 maxDbA = currentSliceMax,
                 doseNioshInc = currentSliceDoseNiosh,
-                doseOshaInc = currentSliceDoseOsha,
+                doseOshaPelInc = currentSliceDoseOshaPel,
+                doseOshaHcInc = currentSliceDoseOshaHc,
                 doseIsoInc = currentSliceDoseIso,
+                doseColRes1792Inc = currentSliceDoseCol,
             )
         )
         if (timeSlices.size >= MAX_TIME_SLICES) {
@@ -230,10 +239,6 @@ object AudioDataStream {
         )
     }
 
-    /**
-     * Compacta pares contiguos de intervalos (2 -> 1) conservando de forma
-     * exacta la energía acústica, los extremos y la dosis de cada sub-rango.
-     */
     private fun compactTimeSlices() {
         val compacted = ArrayList<AcousticTimeSlice>(timeSlices.size / 2 + 2)
         var i = 0
@@ -279,7 +284,9 @@ object AudioDataStream {
             dose = 0.0,
             doseNiosh = 0.0,
             doseOsha = 0.0,
+            doseOshaHc = 0.0,
             doseIso = 0.0,
+            doseColRes1792 = 0.0,
             durationMinutes = 0.0,
             status = "Running",
             savedSessionId = null,
@@ -342,7 +349,7 @@ object AudioDataStream {
     fun onAudioBlock(rawDbA: Double, blockSeconds: Double) {
         if (!isRecording || !rawDbA.isFinite() || blockSeconds <= 0.0) return
         val currentState = _uiState.value
-        val levelDbA = rawDbA + currentState.calibrationOffset
+        val levelDbA = (rawDbA + currentState.calibrationOffset).coerceIn(35.0, 110.0)
         val blockHours = blockSeconds / 3600.0
         val blockEnergySeconds = 10.0.pow(levelDbA / 10.0) * blockSeconds
 
@@ -359,26 +366,30 @@ object AudioDataStream {
         val laeq = 10.0 * log10(sumEnergySeconds / measuredSeconds)
         val sel = 10.0 * log10(sumEnergySeconds)
 
-        // Actualizar histograma para percentiles L10, L50, L90
-        val binIndex = ((levelDbA - 30.0) * 10.0).toInt().coerceIn(0, histogramSeconds.lastIndex)
+        val binIndex = ((levelDbA - HIST_MIN_DB) * 10.0).toInt().coerceIn(0, histogramSeconds.lastIndex)
         histogramSeconds[binIndex] += blockSeconds
 
         val nioshInc = DoseCalculator.dosePercent(levelDbA, blockHours, RegulatoryProfile.nioshDefault())
-        val oshaInc = DoseCalculator.dosePercent(levelDbA, blockHours, RegulatoryProfile.oshaDefault())
+        val oshaPelInc = DoseCalculator.dosePercent(levelDbA, blockHours, RegulatoryProfile.oshaPelDefault())
+        val oshaHcInc = DoseCalculator.dosePercent(levelDbA, blockHours, RegulatoryProfile.oshaHcDefault())
         val isoInc = DoseCalculator.dosePercent(levelDbA, blockHours, RegulatoryProfile.iso9612Default())
+        val colInc = DoseCalculator.dosePercent(levelDbA, blockHours, RegulatoryProfile.colombiaRes1792Default())
 
         accumulatedDose["niosh"] = (accumulatedDose["niosh"] ?: 0.0) + nioshInc
-        accumulatedDose["osha"] = (accumulatedDose["osha"] ?: 0.0) + oshaInc
+        accumulatedDose["osha"] = (accumulatedDose["osha"] ?: 0.0) + oshaPelInc
+        accumulatedDose["osha_hc"] = (accumulatedDose["osha_hc"] ?: 0.0) + oshaHcInc
         accumulatedDose["iso9612"] = (accumulatedDose["iso9612"] ?: 0.0) + isoInc
+        accumulatedDose["col_res1792"] = (accumulatedDose["col_res1792"] ?: 0.0) + colInc
 
-        // Acumular en el intervalo temporal actual para el CSV
         currentSliceDuration += blockSeconds
         currentSliceEnergy += blockEnergySeconds
         currentSliceMin = minOf(currentSliceMin, levelDbA)
         currentSliceMax = maxOf(currentSliceMax, levelDbA)
         currentSliceDoseNiosh += nioshInc
-        currentSliceDoseOsha += oshaInc
+        currentSliceDoseOshaPel += oshaPelInc
+        currentSliceDoseOshaHc += oshaHcInc
         currentSliceDoseIso += isoInc
+        currentSliceDoseCol += colInc
 
         if (currentSliceDuration + 1e-6 >= sliceTargetSeconds) {
             commitCurrentSliceIfNotEmpty()
@@ -405,30 +416,21 @@ object AudioDataStream {
             dose = accumulatedDose[currentState.profileId] ?: 0.0,
             doseNiosh = accumulatedDose["niosh"] ?: 0.0,
             doseOsha = accumulatedDose["osha"] ?: 0.0,
+            doseOshaHc = accumulatedDose["osha_hc"] ?: 0.0,
             doseIso = accumulatedDose["iso9612"] ?: 0.0,
+            doseColRes1792 = accumulatedDose["col_res1792"] ?: 0.0,
             durationMinutes = measuredSeconds / 60.0,
             status = "Running",
         )
         persistState(force = false)
     }
 
-    /**
-     * Construye la serie temporal completa de la sesión para guardar en Room y exportar a CSV.
-     * Si la medición tiene muchos puntos, aplica agrupación adaptativa según la duración total
-     * promediando la energía acústica de forma logarítmica exacta.
-     */
     @Synchronized
     fun buildMeasurementPoints(sessionId: Long, profileId: String): List<MeasurementPointEntity> {
         commitCurrentSliceIfNotEmpty()
         if (timeSlices.isEmpty()) return emptyList()
 
         val totalSec = measuredSeconds
-        // Definir tamaño de ventana estadístico óptimo según la duración total:
-        // - Hasta 3 min: muestra por muestra cada 1 s (ej. 1 min = 60 filas)
-        // - 3 a 15 min: rangos de 5 s (36 a 180 filas)
-        // - 15 a 60 min: rangos de 15 s (60 a 240 filas)
-        // - 1 a 4 horas: rangos de 30 s (120 a 480 filas)
-        // - Más de 4 horas (ej. 8 h): rangos de 60 s / 1 min (480 filas en 8 h)
         val desiredWindowSec = when {
             totalSec <= 3 * 60 -> 1.0
             totalSec <= 15 * 60 -> 5.0
@@ -453,15 +455,19 @@ object AudioDataStream {
         var cumDuration = 0.0
         var cumEnergy = 0.0
         var cumNiosh = 0.0
-        var cumOsha = 0.0
+        var cumOshaPel = 0.0
+        var cumOshaHc = 0.0
         var cumIso = 0.0
+        var cumCol = 0.0
 
         for (s in groupedSlices) {
             cumDuration += s.durationSeconds
             cumEnergy += s.energySumSeconds
             cumNiosh += s.doseNioshInc
-            cumOsha += s.doseOshaInc
+            cumOshaPel += s.doseOshaPelInc
+            cumOshaHc += s.doseOshaHcInc
             cumIso += s.doseIsoInc
+            cumCol += s.doseColRes1792Inc
 
             val sliceLaeq = if (s.durationSeconds > 0.0 && s.energySumSeconds > 0.0) {
                 10.0 * log10(s.energySumSeconds / s.durationSeconds)
@@ -473,8 +479,10 @@ object AudioDataStream {
             val cumSel = if (cumEnergy > 0.0) 10.0 * log10(cumEnergy) else 0.0
 
             val activeCumDose = when (profileId) {
-                "osha" -> cumOsha
+                "osha", "osha_pel" -> cumOshaPel
+                "osha_hc" -> cumOshaHc
                 "iso9612" -> cumIso
+                "col_res1792" -> cumCol
                 else -> cumNiosh
             }
             val cumTwa = DoseCalculator.twaFromDose(activeCumDose, activeProfile).let {
@@ -496,8 +504,10 @@ object AudioDataStream {
                     twa = cumTwa,
                     dosePercent = activeCumDose,
                     doseNiosh = cumNiosh,
-                    doseOsha = cumOsha,
+                    doseOsha = cumOshaPel,
+                    doseOshaHc = cumOshaHc,
                     doseIso = cumIso,
+                    doseColRes1792 = cumCol,
                 )
             )
         }

@@ -55,7 +55,6 @@ class PdfReportExporter(private val context: Context) {
         val margin = 30f
         val contentWidth = pageWidth - margin * 2
 
-        // 1. Fondo blanco limpio
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorBg
             style = Paint.Style.FILL
@@ -78,15 +77,13 @@ class PdfReportExporter(private val context: Context) {
 
         val profile = RegulatoryProfile.byId(session.profileId)
         val profileLabel = when (profile.id) {
-            "osha" -> "OSHA PEL (90 dBA / 8h • Tasa 5 dB • Umbral 80 dBA)"
-            "iso9612" -> "ISO 9612 Colombia (85 dBA / 8h • Tasa 3 dB • Sin umbral)"
+            "osha" -> "OSHA PEL (90 dBA / 8h • Tasa 5 dB • Umbral 90 dBA)"
+            "osha_hc" -> "OSHA HC (90 dBA / 8h • Tasa 5 dB • Umbral 80 dBA)"
+            "iso9612" -> "ISO 9612 (85 dBA / 8h • Tasa 3 dB • Sin umbral)"
+            "col_res1792" -> "Res. 1792/1990 Colombia (85 dBA / 8h • Tasa 5 dB • Umbral 80 dBA)"
             else -> "NIOSH REL (85 dBA / 8h • Tasa 3 dB • Umbral 80 dBA)"
         }
-        val profileShort = when (profile.id) {
-            "osha" -> "OSHA"
-            "iso9612" -> "ISO 9612"
-            else -> "NIOSH"
-        }
+        val profileShort = profile.name
 
         val startMs = session.startedAtEpochMs
         val endMs = session.endedAtEpochMs ?: System.currentTimeMillis()
@@ -140,7 +137,7 @@ class PdfReportExporter(private val context: Context) {
             color = Color.WHITE
             textSize = 10f
         }
-        val badgeText = "NORMA: $profileShort"
+        val badgeText = "CRITERIO: $profileShort"
         val badgeW = badgeTextPaint.measureText(badgeText) + 26f
         val badgeRect = RectF(headerRect.right - badgeW - 14f, y + 14f, headerRect.right - 14f, y + 44f)
         val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -152,7 +149,7 @@ class PdfReportExporter(private val context: Context) {
 
         y = headerRect.bottom + 12f
 
-        // 3. TARJETA PRINCIPAL DE LA MEDICIÓN (Título, Dosis Acumulada, SZL/SEL y Resumen)
+        // 3. TARJETA PRINCIPAL DE LA MEDICIÓN (Título, Dosis Acumulada, SEL (LAE) y Resumen)
         val heroRect = RectF(margin, y, margin + contentWidth, y + 134f)
         canvas.drawRoundRect(heroRect, 14f, 14f, cardPaint)
         canvas.drawRoundRect(heroRect, 14f, 14f, borderPaint)
@@ -241,7 +238,7 @@ class PdfReportExporter(private val context: Context) {
             canvas.drawRoundRect(fillRect, 4.5f, 4.5f, fillPaint)
         }
 
-        // Indicadores rápidos incluyendo SEL / SZL explícitamente
+        // Indicadores rápidos con SEL (LAE)
         val miniLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = regularFont
             color = colorTextSecondary
@@ -257,18 +254,18 @@ class PdfReportExporter(private val context: Context) {
         val row2Y = y + 122f
 
         drawInlineMetric(canvas, margin + 18f + colW * 0, row1Y, "LAeq: ", "${"%.1f".format(session.laeq)} dBA", miniLabelPaint, miniValPaint)
-        drawInlineMetric(canvas, margin + 18f + colW * 1, row1Y, "SEL / SZL: ", "${"%.1f".format(selValue)} dBA", miniLabelPaint, miniValPaint)
+        drawInlineMetric(canvas, margin + 18f + colW * 1, row1Y, "SEL (LAE): ", "${"%.1f".format(selValue)} dBA", miniLabelPaint, miniValPaint)
         drawInlineMetric(canvas, margin + 18f + colW * 2, row1Y, "LEX,8h/TWA: ", twaString, miniLabelPaint, miniValPaint)
         drawInlineMetric(canvas, margin + 18f + colW * 3, row1Y, "Tiempo: ", durationFormatted, miniLabelPaint, miniValPaint)
 
-        drawInlineMetric(canvas, margin + 18f + colW * 0, row2Y, "Máx/Pico: ", "${"%.1f".format(session.lasMax)} dBA", miniLabelPaint, miniValPaint)
-        drawInlineMetric(canvas, margin + 18f + colW * 1, row2Y, "Mín: ", "${"%.1f".format(lasMinValue)} dBA", miniLabelPaint, miniValPaint)
+        drawInlineMetric(canvas, margin + 18f + colW * 0, row2Y, "LASmax: ", "${"%.1f".format(session.lasMax)} dBA", miniLabelPaint, miniValPaint)
+        drawInlineMetric(canvas, margin + 18f + colW * 1, row2Y, "LASmin: ", "${"%.1f".format(lasMinValue)} dBA", miniLabelPaint, miniValPaint)
         drawInlineMetric(canvas, margin + 18f + colW * 2, row2Y, "L10/L50/L90: ", "${"%.0f".format(l10Value)}/${"%.0f".format(l50Value)}/${"%.0f".format(l90Value)} dB", miniLabelPaint, miniValPaint)
         drawInlineMetric(canvas, margin + 18f + colW * 3, row2Y, "EA: ", "${"%.3f".format(soundExposurePa2h)} Pa²h", miniLabelPaint, miniValPaint)
 
         y = heroRect.bottom + 14f
 
-        // 4. TABLA DE REGISTRO OFICIAL (Cumpliendo todos los ítems de la imagen + parámetros estadísticos y SZL/SEL)
+        // 4. TABLA DE REGISTRO OFICIAL
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val dateStr = dateFormat.format(Date(startMs))
@@ -282,14 +279,16 @@ class PdfReportExporter(private val context: Context) {
         val scheduleValue = "Inicio: $startTimeStr  —  Fin: $endTimeStr  —  Duración: ${"%.2f".format(durationHoursDec)} h ($durationFormatted)"
 
         val nioshPct = if (session.doseNiosh > 0.0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent
-        val oshaPct = if (session.doseOsha > 0.0 || session.profileId != "osha") session.doseOsha else session.dosePercent
+        val oshaPelPct = if (session.doseOsha > 0.0 || session.profileId != "osha") session.doseOsha else session.dosePercent
+        val oshaHcPct = if (session.doseOshaHc > 0.0 || session.profileId != "osha_hc") session.doseOshaHc else session.dosePercent
         val isoPct = if (session.doseIso > 0.0 || session.profileId != "iso9612") session.doseIso else session.dosePercent
+        val colPct = if (session.doseColRes1792 > 0.0 || session.profileId != "col_res1792") session.doseColRes1792 else session.dosePercent
 
         val equipmentResultsValue =
-            "LAeq: ${"%.1f".format(session.laeq)} dBA  |  SEL (SZL): ${"%.1f".format(selValue)} dBA  |  Dosis: ${"%.2f".format(session.dosePercent)}% (Restante: ${"%.2f".format(remainingDose)}%)  |  LEX,8h: $twaString  |  Pico/Máx: ${"%.1f".format(session.lasMax)} dBA"
+            "LAeq: ${"%.1f".format(session.laeq)} dBA  |  SEL (LAE): ${"%.1f".format(selValue)} dBA  |  Dosis: ${"%.2f".format(session.dosePercent)}% (Restante: ${"%.2f".format(remainingDose)}%)  |  LEX,8h/TWA: $twaString  |  LASmax: ${"%.1f".format(session.lasMax)} dBA"
         val statisticalParamsValue =
             "LASmin: ${"%.1f".format(lasMinValue)} dBA  |  L10: ${"%.1f".format(l10Value)} dBA  |  L50: ${"%.1f".format(l50Value)} dBA  |  L90 (Fondo): ${"%.1f".format(l90Value)} dBA  |  EA: ${"%.3f".format(soundExposurePa2h)} Pa²·h\n" +
-                "Dosis por norma -> NIOSH: ${"%.2f".format(nioshPct)}%  •  OSHA: ${"%.2f".format(oshaPct)}%  •  ISO 9612 (Col): ${"%.2f".format(isoPct)}%"
+                "NIOSH: ${"%.2f".format(nioshPct)}% • OSHA PEL: ${"%.2f".format(oshaPelPct)}% • OSHA HC: ${"%.2f".format(oshaHcPct)}% • ISO 9612: ${"%.2f".format(isoPct)}% • Res. 1792 (Col): ${"%.2f".format(colPct)}%"
 
         val notesValue = session.notes.trim().ifEmpty { "Sin descripción u observaciones adicionales registradas." }
         val evaluatorValue = session.evaluatorName.trim().ifEmpty { "Evaluador SST" }
@@ -298,7 +297,6 @@ class PdfReportExporter(private val context: Context) {
         val tableRight = margin + contentWidth
         val colSplitX = tableLeft + 150f
 
-        // Encabezado de la tabla
         val tableHeaderH = 32f
         val headerTableRect = RectF(tableLeft, y, tableRight, y + tableHeaderH)
         val headerBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -341,7 +339,7 @@ class PdfReportExporter(private val context: Context) {
             Triple("Trabajador / Cargo", workerAndRole, false),
             Triple("Horario de medición", scheduleValue, false),
             Triple("Resultados del equipo", equipmentResultsValue, true),
-            Triple("Estadística y Normas", statisticalParamsValue, false)
+            Triple("Estadística y Perfiles", statisticalParamsValue, false)
         )
 
         val valueColWidth = (tableRight - colSplitX - 26f).toInt()
@@ -435,7 +433,7 @@ class PdfReportExporter(private val context: Context) {
         }
         val footerY = pageHeight - 18f
         canvas.drawText(
-            "LevelApp • Sesión #${session.id} • Reporte técnico de dosimetría acústica (LAeq, SEL/SZL, LEX,8h, Percentiles L10-L90).",
+            "LevelApp • Sesión #${session.id} • Reporte técnico de dosimetría acústica (LAeq, SEL/LAE, LEX,8h/TWA, Percentiles L10-L90). Rango: 35–110 dB(A).",
             margin,
             footerY,
             footerPaint

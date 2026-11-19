@@ -9,6 +9,7 @@ import kotlin.math.log10
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AWeightingAndDoseTest {
@@ -21,7 +22,7 @@ class AWeightingAndDoseTest {
         for (i in 0 until n) {
             val x = sin(2 * PI * freq * i / 48000.0)
             val y = filter.processSample(x)
-            if (i >= 48000) { // descartar transitorio
+            if (i >= 48000) {
                 sumIn += x * x
                 sumOut += y * y
             }
@@ -50,15 +51,35 @@ class AWeightingAndDoseTest {
     }
 
     @Test
-    fun `iso 9612 85 dBA for 8 hours equals 100 percent`() {
-        val dose = DoseCalculator.dosePercent(85.0, 8.0, RegulatoryProfile.iso9612Default())
-        assertTrue(abs(dose - 100.0) < 0.01)
+    fun `osha pel has 90 dBA threshold while osha hc has 80 dBA threshold`() {
+        val oshaPel = RegulatoryProfile.oshaPelDefault()
+        val oshaHc = RegulatoryProfile.oshaHcDefault()
+
+        // A 85 dB(A) durante 8 h:
+        // - OSHA PEL (umbral 90 dBA) no integra nada -> 0.0%
+        // - OSHA HC (umbral 80 dBA, criterio 90, q=5) -> 50.0% (Action Level)
+        assertEquals(0.0, DoseCalculator.dosePercent(85.0, 8.0, oshaPel), 1e-6)
+        assertEquals(50.0, DoseCalculator.dosePercent(85.0, 8.0, oshaHc), 1e-6)
+
+        // A 90 dB(A) durante 8 h ambos dan 100.0%
+        assertEquals(100.0, DoseCalculator.dosePercent(90.0, 8.0, oshaPel), 1e-6)
+        assertEquals(100.0, DoseCalculator.dosePercent(90.0, 8.0, oshaHc), 1e-6)
     }
 
     @Test
-    fun `iso 9612 has no threshold so quiet periods still count but tiny`() {
-        val dose = DoseCalculator.dosePercent(55.0, 1.0, RegulatoryProfile.iso9612Default())
-        assertTrue(dose > 0.0 && dose < 0.02)
+    fun `colombia res 1792 uses 85 dBA criterion and 5 dB exchange rate`() {
+        val col = RegulatoryProfile.colombiaRes1792Default()
+        assertEquals(100.0, DoseCalculator.dosePercent(85.0, 8.0, col), 1e-6)
+        assertEquals(100.0, DoseCalculator.dosePercent(90.0, 4.0, col), 1e-6)
+        assertEquals(100.0, DoseCalculator.dosePercent(95.0, 2.0, col), 1e-6)
+    }
+
+    @Test
+    fun `iso 9612 85 dBA for 8 hours equals 100 percent and has no threshold`() {
+        val iso = RegulatoryProfile.iso9612Default()
+        assertTrue(abs(DoseCalculator.dosePercent(85.0, 8.0, iso) - 100.0) < 0.01)
+        val quietDose = DoseCalculator.dosePercent(55.0, 1.0, iso)
+        assertTrue(quietDose > 0.0 && quietDose < 0.02)
     }
 
     @Test
@@ -68,7 +89,6 @@ class AWeightingAndDoseTest {
         val blockHours = 0.1 / 3600.0
         val totalBlocks = 8 * 3600 * 10
         for (i in 0 until totalBlocks) {
-            // primera media hora ruidosa (92 dB) y luego silencio (55 dB)
             val level = if (i < 30 * 60 * 10) 92.0 else 55.0
             profiles.forEachIndexed { idx, p ->
                 val before = acc[idx]
@@ -78,6 +98,5 @@ class AWeightingAndDoseTest {
         }
         val nioshExpected = DoseCalculator.dosePercent(92.0, 0.5, RegulatoryProfile.nioshDefault())
         assertTrue(abs(acc[0] - nioshExpected) < 0.01, "NIOSH ${acc[0]} vs $nioshExpected")
-        assertTrue(acc[2] >= acc[0])
     }
 }

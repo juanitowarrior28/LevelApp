@@ -25,7 +25,9 @@ data class SessionUiState(
     val dose: Double = 0.0,
     val doseNiosh: Double = 0.0,
     val doseOsha: Double = 0.0,
+    val doseOshaHc: Double = 0.0,
     val doseIso: Double = 0.0,
+    val doseColRes1792: Double = 0.0,
     val durationMinutes: Double = 0.0,
     val status: String = "Idle",
     val savedSessionId: Long? = null,
@@ -101,7 +103,9 @@ class AcousticSessionViewModel(
                 dosePercent = finalState.dose,
                 doseNiosh = finalState.doseNiosh,
                 doseOsha = finalState.doseOsha,
+                doseOshaHc = finalState.doseOshaHc,
                 doseIso = finalState.doseIso,
+                doseColRes1792 = finalState.doseColRes1792,
                 notes = notes.trim()
             )
             val sessionId = repository.saveSession(entity)

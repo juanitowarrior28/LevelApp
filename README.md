@@ -5,8 +5,8 @@ LevelApp es una aplicación Android modular y profesional para la medición de r
 ## 🚀 Características Principales
 
 * **Medición en Segundo Plano (Foreground Service):** Captura continua de audio, permitiendo apagar la pantalla o cambiar de app sin detener la medición de ruido.
-* **Procesamiento de Señal Avanzado (DSP):** Implementa un filtro digital IIR de Ponderación A (A-Weighting) adaptado a la respuesta del oído humano.
-* **Dosimetría de Ruido:** Soporte dinámico para normativas internacionales **NIOSH** (límite 85dB / intercambio 3dB) y **OSHA** (límite 90dB / intercambio 5dB).
+* **Procesamiento de Señal Avanzado (DSP):** Implementa un filtro digital IIR de Ponderación A (A-Weighting, 6.º orden IEC 61672 a 48 kHz) con rango dinámico operativo de **35.0 a 110.0 dB(A)**.
+* **Dosimetría de Ruido Multi-Criterio:** Soporte simultáneo para **NIOSH REL** (85 dBA / q=3 dB / umbral 80 dBA), **OSHA PEL** (90 dBA / q=5 dB / umbral 90 dBA), **OSHA HC** (90 dBA / q=5 dB / umbral 80 dBA), **ISO 9612** (85 dBA / q=3 dB / sin umbral) y **Resolución 1792 de 1990 (Colombia)** (85 dBA / q=5 dB / umbral 80 dBA).
 * **Alertas Hápticas:** Alarma por vibración automática cuando el trabajador alcanza el 100% de la dosis diaria segura.
 * **Interfaz Moderna Oscura (Dark Theme):** Desarrollada 100% en Jetpack Compose, con gráficos (Canvas) de nivel sonoro en tiempo real y semaforización de riesgo.
 * **Onboarding Interactivo (Spotlight Tour):** Tutorial guiado nativo (creado con Canvas y BlendMode.Clear) para enseñar el uso de la app paso a paso en el primer inicio.
