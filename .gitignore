@@ -1,0 +1,23 @@
+# Gradle & build outputs
+.gradle/
+build/
+**/build/
+**/bin/
+
+# Local configuration
+local.properties
+
+# Android Studio / IntelliJ ephemeral caches
+.idea/caches/
+.idea/libraries/
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/.name
+*.iml
+
+# OS / Misc
+.DS_Store
+Thumbs.db
+*.log
