@@ -15,7 +15,7 @@ LevelApp es una aplicación Android modular para la medición de ruido y cálcul
   * Descarte de transitorios de arranque del hardware (*warm-up gate* de $500\text{ ms}$) para eliminar picos falsos al iniciar la captura.
   * Filtro digital IIR de **6.º orden** en Forma Directa II Transpuesta (DF-II-T) con rango dinámico operativo unificado de **35.0 a 110.0 dB(A)**.
 * **Dosimetría Multi-Criterio en Paralelo (5 Perfiles):**
-  Integración incremental monotónica simultánea en cinco perfiles seleccionables en tiempo real sin pérdida de acumulado:
+  La pantalla principal muestra un selector simplificado de 3 criterios (**NIOSH** | **OSHA** | **COLOMBIA**) que se pueden cambiar en tiempo real sin perder lo acumulado. Internamente se integran de forma incremental y simultánea los cinco perfiles, y los cinco aparecen en los reportes PDF y CSV:
   * **NIOSH REL:** Criterio $85.0\text{ dB(A)}$ / $8\text{ h}$, tasa de intercambio $q = 3.0\text{ dB}$, umbral $L_{\text{th}} = 80.0\text{ dB(A)}$.
   * **OSHA PEL** *(29 CFR 1910.95 Table G-16)*: Criterio $90.0\text{ dB(A)}$ / $8\text{ h}$, tasa de intercambio $q = 5.0\text{ dB}$, umbral $L_{\text{th}} = 90.0\text{ dB(A)}$.
   * **OSHA HC** *(29 CFR 1910.95 Hearing Conservation / Action Level)*: Criterio $90.0\text{ dB(A)}$ / $8\text{ h}$ ($50\%\text{ dosis} = 85\text{ dB(A)}$), tasa de intercambio $q = 5.0\text{ dB}$, umbral $L_{\text{th}} = 80.0\text{ dB(A)}$.

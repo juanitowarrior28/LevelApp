@@ -2,7 +2,7 @@
 
 El motor de dosimetría integra la exposición en bloques discretos de $\Delta t = 100\text{ ms}$ dentro de un rango operativo unificado de **35.0 a 110.0 dB(A)** (acorde con la referencia de fondo de escala digital $0\text{ dBFS} \equiv 100\text{ dB SPL}$, el piso de ruido propio de micrófonos MEMS y su punto de sobrecarga acústica).
 
-Se implementan cinco perfiles en paralelo (`RegulatoryProfile`):
+Se implementan cinco perfiles en paralelo (`RegulatoryProfile`), mostrando en la pantalla principal un selector simplificado de tres criterios (**NIOSH**, **OSHA**, **COLOMBIA**) mientras los cinco se integran simultáneamente para los reportes PDF y CSV:
 
 - **NIOSH REL**: criterio $85.0\text{ dB(A)}$ / $8\text{ h}$, tasa de intercambio $q = 3.0\text{ dB}$, umbral $L_{\text{th}} = 80.0\text{ dB(A)}$.
 - **OSHA PEL** (*29 CFR 1910.95 Table G-16*): criterio $90.0\text{ dB(A)}$ / $8\text{ h}$, tasa de intercambio $q = 5.0\text{ dB}$, umbral $L_{\text{th}} = 90.0\text{ dB(A)}$.

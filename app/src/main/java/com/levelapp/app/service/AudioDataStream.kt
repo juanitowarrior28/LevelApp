@@ -117,7 +117,9 @@ object AudioDataStream {
 
     private fun restoreFromPrefs(sp: SharedPreferences) {
         val savedStatus = sp.getString("status", "Idle") ?: "Idle"
-        val profileId = sp.getString("profileId", "niosh") ?: "niosh"
+        // Solo NIOSH, OSHA y COLOMBIA son seleccionables en la UI
+        val profileId = (sp.getString("profileId", "niosh") ?: "niosh")
+            .let { if (it in setOf("niosh", "osha", "col_res1792")) it else "niosh" }
         val calibrationOffset = sp.getDouble("calibrationOffset")
 
         if (savedStatus == "Running" || savedStatus == "Stopped" || savedStatus == "Paused") {
