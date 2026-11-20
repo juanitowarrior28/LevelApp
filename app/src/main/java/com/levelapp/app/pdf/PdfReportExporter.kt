@@ -12,6 +12,7 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.core.content.res.ResourcesCompat
 import com.levelapp.app.R
+import com.levelapp.core.dosimetry.DoseCalculator
 import com.levelapp.core.dosimetry.RegulatoryProfile
 import com.levelapp.data.database.SessionEntity
 import java.io.File
@@ -20,11 +21,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.log10
-import kotlin.math.pow
 
 class PdfReportExporter(private val context: Context) {
 
-    // Paleta Tema Blanco (ideal para impresión y firmas) con acentos Periwinkle de LevelApp
     private val colorBg = Color.parseColor("#FFFFFF")
     private val colorCard = Color.parseColor("#F8FAFC")
     private val colorCardAlt = Color.parseColor("#FFFFFF")
@@ -33,16 +32,18 @@ class PdfReportExporter(private val context: Context) {
     private val colorTextSecondary = Color.parseColor("#475569")
     private val colorPeriwinkle = Color.parseColor("#5B60F6")
     private val colorPeriwinkleBg = Color.parseColor("#EEF0FF")
+    private val colorGreen = Color.parseColor("#16A34A")
     private val colorAmber = Color.parseColor("#D97706")
+    private val colorAmberBg = Color.parseColor("#FFFBEB")
     private val colorRed = Color.parseColor("#DC2626")
 
     fun generateSessionPdf(session: SessionEntity): File {
         val pdfDocument = PdfDocument()
         val pageWidth = 595
         val pageHeight = 842
-        val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
-        val page = pdfDocument.startPage(pageInfo)
-        val canvas = page.canvas
+        val margin = 28f
+        val contentWidth = pageWidth - margin * 2
+        val footerLimitY = pageHeight - 30f
 
         val baseTypeface = try {
             ResourcesCompat.getFont(context, R.font.bricolage_grotesque) ?: Typeface.SANS_SERIF
@@ -52,27 +53,45 @@ class PdfReportExporter(private val context: Context) {
         val regularFont = Typeface.create(baseTypeface, Typeface.NORMAL)
         val boldFont = Typeface.create(baseTypeface, Typeface.BOLD)
 
-        val margin = 30f
-        val contentWidth = pageWidth - margin * 2
-
-        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colorBg
-            style = Paint.Style.FILL
-        }
-        canvas.drawRect(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat(), bgPaint)
-
-        val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colorCard
-            style = Paint.Style.FILL
-        }
-        val cardAltPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colorCardAlt
-            style = Paint.Style.FILL
-        }
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorBg; style = Paint.Style.FILL }
+        val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorCard; style = Paint.Style.FILL }
+        val cardAltPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorCardAlt; style = Paint.Style.FILL }
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colorBorder
             style = Paint.Style.STROKE
-            strokeWidth = 1.1f
+            strokeWidth = 1.0f
+        }
+        val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = regularFont
+            color = colorTextSecondary
+            textSize = 7.8f
+        }
+
+        var pageNum = 1
+        var page = pdfDocument.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create())
+        var canvas = page.canvas
+        canvas.drawRect(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat(), bgPaint)
+
+        fun drawFooter() {
+            canvas.drawText(
+                "LevelApp • Sesión #${session.id} (Pág. $pageNum) • Rango confiable 35–110 dB(A) • Ponderación A (IEC 61672-1) / Slow (1 s).",
+                margin,
+                pageHeight - 14f,
+                footerPaint
+            )
+        }
+
+        var y = 22f
+        fun ensureSpace(neededHeight: Float) {
+            if (y + neededHeight > footerLimitY) {
+                drawFooter()
+                pdfDocument.finishPage(page)
+                pageNum++
+                page = pdfDocument.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create())
+                canvas = page.canvas
+                canvas.drawRect(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat(), bgPaint)
+                y = 24f
+            }
         }
 
         val profile = RegulatoryProfile.byId(session.profileId)
@@ -80,192 +99,222 @@ class PdfReportExporter(private val context: Context) {
             "osha" -> "OSHA PEL (90 dBA / 8h • Tasa 5 dB • Umbral 90 dBA)"
             "osha_hc" -> "OSHA HC (90 dBA / 8h • Tasa 5 dB • Umbral 80 dBA)"
             "iso9612" -> "ISO 9612 (85 dBA / 8h • Tasa 3 dB • Sin umbral)"
-            "col_res1792" -> "Res. 1792/1990 Colombia (85 dBA / 8h • Tasa 5 dB • Umbral 80 dBA)"
+            "col_res1792" -> "COLOMBIA - Res. 1792/1990 (85 dBA / 8h • Tasa 5 dB • Umbral 80 dBA)"
             else -> "NIOSH REL (85 dBA / 8h • Tasa 3 dB • Umbral 80 dBA)"
         }
-        val profileShort = profile.name
 
+        // Duración real medida (measuredSeconds excluye pausas)
         val startMs = session.startedAtEpochMs
         val endMs = session.endedAtEpochMs ?: System.currentTimeMillis()
-        val durationSec = if (session.durationSeconds > 0.0) {
+        val measuredSec = if (session.durationSeconds > 0.0) {
             session.durationSeconds
         } else {
             ((endMs - startMs).coerceAtLeast(1000L)) / 1000.0
         }
-        val durationMs = (durationSec * 1000.0).toLong()
-        val durationFormatted = formatDurationHms(durationMs)
-        val durationHoursDec = durationSec / 3600.0
+        val wallSec = ((endMs - startMs).coerceAtLeast(0L)) / 1000.0
+        val measuredFormatted = formatDurationHms((measuredSec * 1000.0).toLong())
+        val wallFormatted = formatDurationHms((wallSec * 1000.0).toLong())
+        val measuredHours = measuredSec / 3600.0
 
         val selValue = if (session.sel > 0.0) {
             session.sel
-        } else if (session.laeq > 0.0 && durationSec > 0.0) {
-            session.laeq + 10.0 * log10(durationSec)
+        } else if (session.laeq > 0.0 && measuredSec > 0.0) {
+            session.laeq + 10.0 * log10(measuredSec)
         } else 0.0
+        val lex8hValue = DoseCalculator.lex8h(session.laeq, measuredSec)
+        val lex8hStr = if (lex8hValue.isFinite()) "${"%.1f".format(Locale.US, lex8hValue)} dBA" else "--"
+        val eaPa2h = if (session.soundExposurePa2h > 0.0) {
+            session.soundExposurePa2h
+        } else {
+            DoseCalculator.soundExposurePa2hFromLaeq(session.laeq, measuredSec)
+        }
+        val eaStr = DoseCalculator.formatSoundExposure(eaPa2h)
+        val projectedDose8h = DoseCalculator.projectedDose8hFromDose(session.dosePercent, measuredSec, profile)
+        val twaStr = DoseCalculator.formatTwa(session.dosePercent, profile)
+
         val lasMinValue = if (session.lasMin > 0.0) session.lasMin else session.laeq
         val l10Value = if (session.l10 > 0.0) session.l10 else session.lasMax
         val l50Value = if (session.l50 > 0.0) session.l50 else session.laeq
         val l90Value = if (session.l90 > 0.0) session.l90 else lasMinValue
-        val remainingDose = (100.0 - session.dosePercent).coerceAtLeast(0.0)
-        val projectedDose8h = if (durationHoursDec > 1e-6) session.dosePercent * (8.0 / durationHoursDec) else 0.0
-        val soundExposurePa2h = 4e-10 * durationHoursDec * 10.0.pow(session.laeq / 10.0)
-        val twaString = if (session.twa.isFinite() && session.twa > 0.0) "${"%.1f".format(session.twa)} dBA" else "0.0 dBA"
 
-        var y = 26f
-
-        // 2. HEADER
-        val headerRect = RectF(margin, y, margin + contentWidth, y + 58f)
-        canvas.drawRoundRect(headerRect, 14f, 14f, cardPaint)
-        canvas.drawRoundRect(headerRect, 14f, 14f, borderPaint)
+        // 1. HEADER
+        val headerRect = RectF(margin, y, margin + contentWidth, y + 48f)
+        canvas.drawRoundRect(headerRect, 12f, 12f, cardPaint)
+        canvas.drawRoundRect(headerRect, 12f, 12f, borderPaint)
 
         val brandPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorTextPrimary
-            textSize = 19f
-            letterSpacing = 0.12f
+            typeface = boldFont; color = colorTextPrimary; textSize = 17f; letterSpacing = 0.12f
         }
-        canvas.drawText("LEVELAPP", margin + 18f, y + 27f, brandPaint)
+        canvas.drawText("LEVELAPP", margin + 16f, y + 22f, brandPaint)
 
         val subBrandPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = regularFont
-            color = colorTextSecondary
-            textSize = 9f
+            typeface = regularFont; color = colorTextSecondary; textSize = 8.5f
         }
-        canvas.drawText("REPORTE DE DOSIMETRÍA ACÚSTICA OCUPACIONAL", margin + 18f, y + 43f, subBrandPaint)
+        canvas.drawText("REPORTE DE DOSIMETRÍA ACÚSTICA OCUPACIONAL", margin + 16f, y + 36f, subBrandPaint)
 
         val badgeTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = Color.WHITE
-            textSize = 10f
+            typeface = boldFont; color = Color.WHITE; textSize = 9.5f
         }
-        val badgeText = "CRITERIO: $profileShort"
-        val badgeW = badgeTextPaint.measureText(badgeText) + 26f
-        val badgeRect = RectF(headerRect.right - badgeW - 14f, y + 14f, headerRect.right - 14f, y + 44f)
-        val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colorPeriwinkle
-            style = Paint.Style.FILL
-        }
-        canvas.drawRoundRect(badgeRect, 14f, 14f, badgeBgPaint)
-        canvas.drawText(badgeText, badgeRect.left + 13f, badgeRect.centerY() + 3.5f, badgeTextPaint)
+        val badgeText = "CRITERIO: ${profile.name}"
+        val badgeW = badgeTextPaint.measureText(badgeText) + 22f
+        val badgeRect = RectF(headerRect.right - badgeW - 12f, y + 11f, headerRect.right - 12f, y + 37f)
+        val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorPeriwinkle; style = Paint.Style.FILL }
+        canvas.drawRoundRect(badgeRect, 13f, 13f, badgeBgPaint)
+        canvas.drawText(badgeText, badgeRect.left + 11f, badgeRect.centerY() + 3.5f, badgeTextPaint)
 
-        y = headerRect.bottom + 12f
+        y = headerRect.bottom + 8f
 
-        // 3. TARJETA PRINCIPAL DE LA MEDICIÓN (Título, Dosis Acumulada, SEL (LAE) y Resumen)
-        val heroRect = RectF(margin, y, margin + contentWidth, y + 134f)
-        canvas.drawRoundRect(heroRect, 14f, 14f, cardPaint)
-        canvas.drawRoundRect(heroRect, 14f, 14f, borderPaint)
+        // 2. HERO: Nombre, Dosis Acumulada, Frase Amigable y Barra
+        val heroRect = RectF(margin, y, margin + contentWidth, y + 84f)
+        canvas.drawRoundRect(heroRect, 12f, 12f, cardPaint)
+        canvas.drawRoundRect(heroRect, 12f, 12f, borderPaint)
 
         val labelSmallPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorPeriwinkle
-            textSize = 8.5f
-            letterSpacing = 0.08f
+            typeface = boldFont; color = colorPeriwinkle; textSize = 8f; letterSpacing = 0.08f
         }
-        canvas.drawText("NOMBRE DE LA MEDICIÓN", margin + 18f, y + 20f, labelSmallPaint)
+        canvas.drawText("NOMBRE DE LA MEDICIÓN", margin + 16f, y + 17f, labelSmallPaint)
 
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorTextPrimary
-            textSize = 15.5f
+            typeface = boldFont; color = colorTextPrimary; textSize = 14f
         }
         val displayTitle = session.title.ifBlank { "Sesión #${session.id}" }
-        canvas.drawText(ellipsize(displayTitle, titlePaint, contentWidth * 0.56f), margin + 18f, y + 40f, titlePaint)
+        canvas.drawText(ellipsize(displayTitle, titlePaint, contentWidth * 0.56f), margin + 16f, y + 35f, titlePaint)
 
         val normDetailPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = regularFont
-            color = colorTextSecondary
-            textSize = 9.5f
+            typeface = regularFont; color = colorTextSecondary; textSize = 8.8f
         }
-        canvas.drawText("Criterio: $profileLabel", margin + 18f, y + 56f, normDetailPaint)
-        canvas.drawText(
-            "Exposición restante permitida: ${"%.2f".format(remainingDose)}%  •  Proyección 8h: ${"%.2f".format(projectedDose8h)}%",
-            margin + 18f,
-            y + 70f,
-            normDetailPaint
-        )
+        canvas.drawText(profileLabel, margin + 16f, y + 49f, normDetailPaint)
 
         val doseColor = when {
             session.dosePercent >= 100.0 -> colorRed
             session.dosePercent >= 50.0 -> colorAmber
-            else -> colorPeriwinkle
+            else -> colorGreen
         }
         val statusLabel = when {
-            session.dosePercent >= 100.0 -> "RIESGO ALTO (≥ 100%)"
-            session.dosePercent >= 50.0 -> "PRECAUCIÓN (≥ 50%)"
-            else -> "EXPOSICIÓN DENTRO DEL LÍMITE"
+            session.dosePercent >= 100.0 -> "Límite superado: usa protección y reduce la exposición"
+            session.dosePercent >= 50.0 -> "Cerca del límite: usa protección auditiva"
+            else -> "Exposición aceptable"
         }
 
         val doseRightLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorTextSecondary
-            textSize = 9f
-            textAlign = Paint.Align.RIGHT
+            typeface = boldFont; color = colorTextSecondary; textSize = 8.5f; textAlign = Paint.Align.RIGHT
         }
-        canvas.drawText("DOSIS ACUMULADA ($profileShort)", heroRect.right - 18f, y + 20f, doseRightLabelPaint)
+        canvas.drawText("DOSIS ACUMULADA (${profile.name})", heroRect.right - 16f, y + 17f, doseRightLabelPaint)
 
         val doseValuePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = doseColor
-            textSize = 25f
-            textAlign = Paint.Align.RIGHT
+            typeface = boldFont; color = doseColor; textSize = 22f; textAlign = Paint.Align.RIGHT
         }
-        canvas.drawText("${"%.2f".format(session.dosePercent)}%", heroRect.right - 18f, y + 47f, doseValuePaint)
+        canvas.drawText("${"%.2f".format(Locale.US, session.dosePercent)}%", heroRect.right - 16f, y + 42f, doseValuePaint)
 
         val statusPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = doseColor
-            textSize = 8.5f
-            textAlign = Paint.Align.RIGHT
+            typeface = boldFont; color = doseColor; textSize = 8.2f; textAlign = Paint.Align.RIGHT
         }
-        canvas.drawText(statusLabel, heroRect.right - 18f, y + 61f, statusPaint)
+        canvas.drawText(statusLabel, heroRect.right - 16f, y + 55f, statusPaint)
 
-        // Barra de progreso de dosis
-        val barTop = y + 80f
-        val barRect = RectF(margin + 18f, barTop, heroRect.right - 18f, barTop + 9f)
-        val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#E2E8F0")
-            style = Paint.Style.FILL
-        }
-        canvas.drawRoundRect(barRect, 4.5f, 4.5f, trackPaint)
-
+        val barTop = y + 64f
+        val barRect = RectF(margin + 16f, barTop, heroRect.right - 16f, barTop + 8f)
+        val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#E2E8F0"); style = Paint.Style.FILL }
+        canvas.drawRoundRect(barRect, 4f, 4f, trackPaint)
         val progressFraction = (session.dosePercent / 100.0).coerceIn(0.0, 1.0).toFloat()
         if (progressFraction > 0f) {
-            val fillWidth = (barRect.width() * progressFraction).coerceAtLeast(9f)
-            val fillRect = RectF(barRect.left, barRect.top, barRect.left + fillWidth, barRect.bottom)
-            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = doseColor
-                style = Paint.Style.FILL
-            }
-            canvas.drawRoundRect(fillRect, 4.5f, 4.5f, fillPaint)
+            val fillWidth = (barRect.width() * progressFraction).coerceAtLeast(8f)
+            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = doseColor; style = Paint.Style.FILL }
+            canvas.drawRoundRect(RectF(barRect.left, barRect.top, barRect.left + fillWidth, barRect.bottom), 4f, 4f, fillPaint)
         }
 
-        // Indicadores rápidos con SEL (LAE)
-        val miniLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = regularFont
-            color = colorTextSecondary
-            textSize = 9f
+        y = heroRect.bottom + 8f
+
+        // 3. BLOQUE DE RESULTADOS EN ORDEN EXACTO (Req 8):
+        // Criterio elegido -> Dosis -> TWA -> Proyección 8 h -> L_EX,8h -> LAeq -> SEL (LAE) -> LASmax -> L10/L50/L90 -> E_A
+        val resCardH = 104f
+        val resRect = RectF(margin, y, margin + contentWidth, y + resCardH)
+        canvas.drawRoundRect(resRect, 12f, 12f, cardPaint)
+        canvas.drawRoundRect(resRect, 12f, 12f, borderPaint)
+
+        canvas.drawText("RESULTADOS DE LA MEDICIÓN", margin + 16f, y + 16f, labelSmallPaint)
+
+        val mLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = regularFont; color = colorTextSecondary; textSize = 8.6f
         }
-        val miniValPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorTextPrimary
-            textSize = 9.5f
+        val mValPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = boldFont; color = colorTextPrimary; textSize = 8.8f
         }
-        val colW = (contentWidth - 36f) / 4f
-        val row1Y = y + 106f
-        val row2Y = y + 122f
+        val leftX = margin + 16f
+        val rightX = margin + contentWidth / 2f + 8f
+        val leftItems = listOf(
+            "1. Criterio elegido: " to profile.name,
+            "2. Dosis acumulada: " to "${"%.2f".format(Locale.US, session.dosePercent)} %",
+            "3. TWA del criterio: " to twaStr,
+            "4. Proyección 8 h: " to "${"%.2f".format(Locale.US, projectedDose8h)} %",
+            "5. L_EX,8h (ISO 9612): " to lex8hStr,
+        )
+        val rightItems = listOf(
+            "6. LAeq,T: " to "${"%.1f".format(Locale.US, session.laeq)} dBA",
+            "7. SEL (LAE): " to "${"%.1f".format(Locale.US, selValue)} dBA",
+            "8. LASmax / LASmin: " to "${"%.1f".format(Locale.US, session.lasMax)} / ${"%.1f".format(Locale.US, lasMinValue)} dBA",
+            "9. L10 / L50 / L90: " to "${"%.1f".format(Locale.US, l10Value)} / ${"%.1f".format(Locale.US, l50Value)} / ${"%.1f".format(Locale.US, l90Value)} dBA",
+            "10. Exposición E_A: " to eaStr,
+        )
+        for (i in leftItems.indices) {
+            val rowY = y + 32f + i * 14f
+            drawInlineMetric(canvas, leftX, rowY, leftItems[i].first, leftItems[i].second, mLabelPaint, mValPaint, contentWidth / 2f - 20f)
+            drawInlineMetric(canvas, rightX, rowY, rightItems[i].first, rightItems[i].second, mLabelPaint, mValPaint, contentWidth / 2f - 20f)
+        }
 
-        drawInlineMetric(canvas, margin + 18f + colW * 0, row1Y, "LAeq: ", "${"%.1f".format(session.laeq)} dBA", miniLabelPaint, miniValPaint)
-        drawInlineMetric(canvas, margin + 18f + colW * 1, row1Y, "SEL (LAE): ", "${"%.1f".format(selValue)} dBA", miniLabelPaint, miniValPaint)
-        drawInlineMetric(canvas, margin + 18f + colW * 2, row1Y, "LEX,8h/TWA: ", twaString, miniLabelPaint, miniValPaint)
-        drawInlineMetric(canvas, margin + 18f + colW * 3, row1Y, "Tiempo: ", durationFormatted, miniLabelPaint, miniValPaint)
+        y = resRect.bottom + 8f
 
-        drawInlineMetric(canvas, margin + 18f + colW * 0, row2Y, "LASmax: ", "${"%.1f".format(session.lasMax)} dBA", miniLabelPaint, miniValPaint)
-        drawInlineMetric(canvas, margin + 18f + colW * 1, row2Y, "LASmin: ", "${"%.1f".format(lasMinValue)} dBA", miniLabelPaint, miniValPaint)
-        drawInlineMetric(canvas, margin + 18f + colW * 2, row2Y, "L10/L50/L90: ", "${"%.0f".format(l10Value)}/${"%.0f".format(l50Value)}/${"%.0f".format(l90Value)} dB", miniLabelPaint, miniValPaint)
-        drawInlineMetric(canvas, margin + 18f + colW * 3, row2Y, "EA: ", "${"%.3f".format(soundExposurePa2h)} Pa²h", miniLabelPaint, miniValPaint)
+        // 4. TABLA COMPARATIVA DE LOS 5 PERFILES (Req 9: Dosis y TWA de cada uno)
+        val compHeaderH = 22f
+        val compRowH = 17f
+        val totalCompH = compHeaderH + 5 * compRowH + 18f
+        ensureSpace(totalCompH)
 
-        y = heroRect.bottom + 14f
+        canvas.drawText("COMPARATIVA DE CRITERIOS (DOSIS Y TWA)", margin + 4f, y + 10f, labelSmallPaint)
+        y += 14f
 
-        // 4. TABLA DE REGISTRO OFICIAL
+        val colP = margin
+        val colC = margin + 125f
+        val colD = margin + 320f
+        val colT = margin + 405f
+        val compRight = margin + contentWidth
+
+        val headerBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorPeriwinkleBg; style = Paint.Style.FILL }
+        val compHeaderRect = RectF(colP, y, compRight, y + compHeaderH)
+        canvas.drawRoundRect(compHeaderRect, 8f, 8f, headerBgPaint)
+        canvas.drawRoundRect(compHeaderRect, 8f, 8f, borderPaint)
+
+        val compHdrPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = boldFont; color = colorPeriwinkle; textSize = 8.8f }
+        canvas.drawText("Perfil", colP + 10f, y + 14.5f, compHdrPaint)
+        canvas.drawText("Parámetros (Lc / q / Umbral)", colC + 8f, y + 14.5f, compHdrPaint)
+        canvas.drawText("Dosis (%)", colD + 8f, y + 14.5f, compHdrPaint)
+        canvas.drawText("TWA del perfil", colT + 8f, y + 14.5f, compHdrPaint)
+        y += compHeaderH + 2f
+
+        val compRowPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = regularFont; color = colorTextPrimary; textSize = 8.4f }
+        val compBoldPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = boldFont; color = colorTextPrimary; textSize = 8.4f }
+
+        val fiveProfiles = listOf(
+            Triple(RegulatoryProfile.nioshDefault(), resolveDose(session, "niosh"), "85 dBA / q=3 dB / Umbral 80 dBA"),
+            Triple(RegulatoryProfile.oshaPelDefault(), resolveDose(session, "osha"), "90 dBA / q=5 dB / Umbral 90 dBA"),
+            Triple(RegulatoryProfile.oshaHcDefault(), resolveDose(session, "osha_hc"), "90 dBA / q=5 dB / Umbral 80 dBA"),
+            Triple(RegulatoryProfile.iso9612Default(), resolveDose(session, "iso9612"), "85 dBA / q=3 dB / Sin umbral"),
+            Triple(RegulatoryProfile.colombiaRes1792Default(), resolveDose(session, "col_res1792"), "85 dBA / q=5 dB / Umbral 80 dBA"),
+        )
+        fiveProfiles.forEachIndexed { idx, (prof, pct, desc) ->
+            val rRect = RectF(colP, y, compRight, y + compRowH)
+            canvas.drawRoundRect(rRect, 5f, 5f, if (idx % 2 == 0) cardPaint else cardAltPaint)
+            canvas.drawRoundRect(rRect, 5f, 5f, borderPaint)
+            val isSelected = prof.id == profile.id
+            canvas.drawText(prof.name, colP + 10f, y + 11.8f, if (isSelected) compBoldPaint else compRowPaint)
+            canvas.drawText(desc, colC + 8f, y + 11.8f, compRowPaint)
+            canvas.drawText("${"%.2f".format(Locale.US, pct)}%", colD + 8f, y + 11.8f, if (isSelected) compBoldPaint else compRowPaint)
+            canvas.drawText(ellipsize(DoseCalculator.formatTwa(pct, prof), compRowPaint, compRight - colT - 14f), colT + 8f, y + 11.8f, compRowPaint)
+            y += compRowH + 2f
+        }
+
+        y += 6f
+
+        // 5. TABLA DE REGISTRO OCUPACIONAL + OBSERVACIONES Y FIRMAS
         val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val dateStr = dateFormat.format(Date(startMs))
@@ -276,169 +325,130 @@ class PdfReportExporter(private val context: Context) {
         val workerNameValue = session.workerName.trim().ifEmpty { "No especificado" }
         val workerRoleValue = session.workerRole.trim().ifEmpty { "No especificado" }
         val workerAndRole = "$workerNameValue / $workerRoleValue"
-        val scheduleValue = "Inicio: $startTimeStr  —  Fin: $endTimeStr  —  Duración: ${"%.2f".format(durationHoursDec)} h ($durationFormatted)"
 
-        val nioshPct = if (session.doseNiosh > 0.0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent
-        val oshaPelPct = if (session.doseOsha > 0.0 || session.profileId != "osha") session.doseOsha else session.dosePercent
-        val oshaHcPct = if (session.doseOshaHc > 0.0 || session.profileId != "osha_hc") session.doseOshaHc else session.dosePercent
-        val isoPct = if (session.doseIso > 0.0 || session.profileId != "iso9612") session.doseIso else session.dosePercent
-        val colPct = if (session.doseColRes1792 > 0.0 || session.profileId != "col_res1792") session.doseColRes1792 else session.dosePercent
-
-        val equipmentResultsValue =
-            "LAeq: ${"%.1f".format(session.laeq)} dBA  |  SEL (LAE): ${"%.1f".format(selValue)} dBA  |  Dosis: ${"%.2f".format(session.dosePercent)}% (Restante: ${"%.2f".format(remainingDose)}%)  |  LEX,8h/TWA: $twaString  |  LASmax: ${"%.1f".format(session.lasMax)} dBA"
-        val statisticalParamsValue =
-            "LASmin: ${"%.1f".format(lasMinValue)} dBA  |  L10: ${"%.1f".format(l10Value)} dBA  |  L50: ${"%.1f".format(l50Value)} dBA  |  L90 (Fondo): ${"%.1f".format(l90Value)} dBA  |  EA: ${"%.3f".format(soundExposurePa2h)} Pa²·h\n" +
-                "NIOSH: ${"%.2f".format(nioshPct)}% • OSHA PEL: ${"%.2f".format(oshaPelPct)}% • OSHA HC: ${"%.2f".format(oshaHcPct)}% • ISO 9612: ${"%.2f".format(isoPct)}% • Res. 1792 (Col): ${"%.2f".format(colPct)}%"
-
-        val notesValue = session.notes.trim().ifEmpty { "Sin descripción u observaciones adicionales registradas." }
-        val evaluatorValue = session.evaluatorName.trim().ifEmpty { "Evaluador SST" }
+        val scheduleValue = if (session.hasPauses || (wallSec - measuredSec >= 2.0)) {
+            val pausedSec = if (session.pausedSeconds > 0.0) session.pausedSeconds else (wallSec - measuredSec).coerceAtLeast(0.0)
+            val pausedFmt = formatDurationHms((pausedSec * 1000.0).toLong())
+            "Inicio: $startTimeStr — Fin: $endTimeStr\nTiempo medido efectivo: ${"%.2f".format(Locale.US, measuredHours)} h ($measuredFormatted)  |  Tiempo total reloj: $wallFormatted (Pausas: $pausedFmt)"
+        } else {
+            "Inicio: $startTimeStr — Fin: $endTimeStr — Duración medida: ${"%.2f".format(Locale.US, measuredHours)} h ($measuredFormatted)"
+        }
 
         val tableLeft = margin
         val tableRight = margin + contentWidth
-        val colSplitX = tableLeft + 150f
+        val colSplitX = tableLeft + 135f
+        val valueColWidth = (tableRight - colSplitX - 22f).toInt()
 
-        val tableHeaderH = 32f
-        val headerTableRect = RectF(tableLeft, y, tableRight, y + tableHeaderH)
-        val headerBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colorPeriwinkleBg
-            style = Paint.Style.FILL
-        }
-        canvas.drawRoundRect(headerTableRect, 10f, 10f, headerBgPaint)
-        canvas.drawRoundRect(headerTableRect, 10f, 10f, borderPaint)
+        val fieldTitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = boldFont; color = colorTextPrimary; textSize = 9.2f }
+        val fieldValuePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = regularFont; color = colorTextPrimary; textSize = 9.0f }
 
-        val tableHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorPeriwinkle
-            textSize = 10.5f
-        }
-        canvas.drawText("Campo", tableLeft + 14f, y + 20f, tableHeaderPaint)
-        canvas.drawText("Registro / Dato a diligenciar", colSplitX + 14f, y + 20f, tableHeaderPaint)
-        canvas.drawLine(colSplitX, y, colSplitX, y + tableHeaderH, borderPaint)
-
-        y += tableHeaderH + 4f
-
-        val fieldTitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorTextPrimary
-            textSize = 10f
-        }
-        val fieldValuePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = regularFont
-            color = colorTextPrimary
-            textSize = 9.8f
-        }
-        val fieldValueHighlightPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorPeriwinkle
-            textSize = 9.8f
-        }
-
-        val rows = listOf(
-            Triple("Área", areaValue, false),
-            Triple("Fecha de medición", dateStr, false),
-            Triple("Trabajador / Cargo", workerAndRole, false),
-            Triple("Horario de medición", scheduleValue, false),
-            Triple("Resultados del equipo", equipmentResultsValue, true),
-            Triple("Estadística y Perfiles", statisticalParamsValue, false)
+        val metaRows = listOf(
+            "Área" to areaValue,
+            "Fecha de medición" to dateStr,
+            "Trabajador / Cargo" to workerAndRole,
+            "Horario de medición" to scheduleValue,
         )
 
-        val valueColWidth = (tableRight - colSplitX - 26f).toInt()
-
-        rows.forEachIndexed { index, (fieldLabel, fieldVal, highlight) ->
-            val vPaint = if (highlight) fieldValueHighlightPaint else fieldValuePaint
-            val valLayout = buildStaticLayout(fieldVal, vPaint, valueColWidth)
-            val rowHeight = maxOf(34f, valLayout.height + 16f)
-            val rowRect = RectF(tableLeft, y, tableRight, y + rowHeight)
-
-            canvas.drawRoundRect(rowRect, 8f, 8f, if (index % 2 == 0) cardPaint else cardAltPaint)
-            canvas.drawRoundRect(rowRect, 8f, 8f, borderPaint)
-            canvas.drawLine(colSplitX, y, colSplitX, y + rowHeight, borderPaint)
-
-            canvas.drawText(fieldLabel, tableLeft + 12f, y + rowHeight / 2f + 3.5f, fieldTitlePaint)
-
+        metaRows.forEachIndexed { idx, (label, valText) ->
+            val valLayout = buildStaticLayout(valText, fieldValuePaint, valueColWidth)
+            val rowH = maxOf(24f, valLayout.height + 10f)
+            ensureSpace(rowH + 4f)
+            val rRect = RectF(tableLeft, y, tableRight, y + rowH)
+            canvas.drawRoundRect(rRect, 6f, 6f, if (idx % 2 == 0) cardPaint else cardAltPaint)
+            canvas.drawRoundRect(rRect, 6f, 6f, borderPaint)
+            canvas.drawLine(colSplitX, y, colSplitX, y + rowH, borderPaint)
+            canvas.drawText(label, tableLeft + 10f, y + rowH / 2f + 3.2f, fieldTitlePaint)
             canvas.save()
-            canvas.translate(colSplitX + 12f, y + (rowHeight - valLayout.height) / 2f)
+            canvas.translate(colSplitX + 10f, y + (rowH - valLayout.height) / 2f)
             valLayout.draw(canvas)
             canvas.restore()
-
-            y += rowHeight + 4f
+            y += rowH + 3f
         }
 
-        // 5. FILA ESPECIAL: Observaciones y firmas
-        val notesLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorTextSecondary
-            textSize = 9f
-        }
-        val notesTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = regularFont
-            color = colorTextPrimary
-            textSize = 9.5f
-        }
+        // Observaciones y firmas
+        val notesValue = session.notes.trim().ifEmpty { "Sin descripción u observaciones adicionales registradas." }
+        val evaluatorValue = session.evaluatorName.trim().ifEmpty { "Evaluador SST" }
+        val notesLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = boldFont; color = colorTextSecondary; textSize = 8.4f }
+        val notesTextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = regularFont; color = colorTextPrimary; textSize = 8.8f }
         val notesLayout = buildStaticLayout(notesValue, notesTextPaint, valueColWidth)
-        val signatureBoxHeight = 72f
-        val obsRowHeight = maxOf(130f, notesLayout.height + signatureBoxHeight + 40f)
-        val obsRect = RectF(tableLeft, y, tableRight, y + obsRowHeight)
+        val sigBoxH = 58f
+        val obsRowH = maxOf(102f, notesLayout.height + sigBoxH + 30f)
 
-        canvas.drawRoundRect(obsRect, 10f, 10f, cardPaint)
-        canvas.drawRoundRect(obsRect, 10f, 10f, borderPaint)
-        canvas.drawLine(colSplitX, y, colSplitX, y + obsRowHeight, borderPaint)
+        ensureSpace(obsRowH + 4f)
+        val obsRect = RectF(tableLeft, y, tableRight, y + obsRowH)
+        canvas.drawRoundRect(obsRect, 8f, 8f, cardPaint)
+        canvas.drawRoundRect(obsRect, 8f, 8f, borderPaint)
+        canvas.drawLine(colSplitX, y, colSplitX, y + obsRowH, borderPaint)
 
-        val obsTitleLayout = buildStaticLayout("Observaciones y firmas", fieldTitlePaint, (colSplitX - tableLeft - 20f).toInt())
+        val obsTitleLayout = buildStaticLayout("Observaciones y firmas", fieldTitlePaint, (colSplitX - tableLeft - 18f).toInt())
         canvas.save()
-        canvas.translate(tableLeft + 12f, y + 16f)
+        canvas.translate(tableLeft + 10f, y + 14f)
         obsTitleLayout.draw(canvas)
         canvas.restore()
 
-        var innerY = y + 12f
-        canvas.drawText("Descripción / Observaciones:", colSplitX + 12f, innerY + 9f, notesLabelPaint)
-        innerY += 13f
+        var innerY = y + 9f
+        canvas.drawText("Descripción / Observaciones:", colSplitX + 10f, innerY + 8f, notesLabelPaint)
+        innerY += 12f
         canvas.save()
-        canvas.translate(colSplitX + 12f, innerY)
+        canvas.translate(colSplitX + 10f, innerY)
         notesLayout.draw(canvas)
         canvas.restore()
 
-        val sigAreaWidth = tableRight - colSplitX - 24f
-        val sigBoxW = (sigAreaWidth - 12f) / 2f
-        val sigBoxTop = obsRect.bottom - signatureBoxHeight - 10f
-        val sigBox1 = RectF(colSplitX + 12f, sigBoxTop, colSplitX + 12f + sigBoxW, sigBoxTop + signatureBoxHeight)
-        val sigBox2 = RectF(sigBox1.right + 12f, sigBoxTop, sigBox1.right + 12f + sigBoxW, sigBoxTop + signatureBoxHeight)
-
+        val sigAreaW = tableRight - colSplitX - 20f
+        val sigBoxW = (sigAreaW - 10f) / 2f
+        val sigTop = obsRect.bottom - sigBoxH - 8f
         drawSignatureBox(
-            canvas = canvas,
-            rect = sigBox1,
-            title = "Firma del trabajador",
-            subtitle = "$workerNameValue ($workerRoleValue)",
-            cardAltPaint = cardAltPaint,
-            borderPaint = borderPaint,
-            boldFont = boldFont,
-            regularFont = regularFont
+            canvas, RectF(colSplitX + 10f, sigTop, colSplitX + 10f + sigBoxW, sigTop + sigBoxH),
+            "Firma del trabajador", "$workerNameValue ($workerRoleValue)", cardAltPaint, borderPaint, boldFont, regularFont
         )
         drawSignatureBox(
-            canvas = canvas,
-            rect = sigBox2,
-            title = "Firma y Licencia SST del evaluador",
-            subtitle = evaluatorValue,
-            cardAltPaint = cardAltPaint,
-            borderPaint = borderPaint,
-            boldFont = boldFont,
-            regularFont = regularFont
+            canvas, RectF(colSplitX + 20f + sigBoxW, sigTop, colSplitX + 20f + sigBoxW * 2f, sigTop + sigBoxH),
+            "Firma y Licencia SST del evaluador", evaluatorValue, cardAltPaint, borderPaint, boldFont, regularFont
         )
+        y = obsRect.bottom + 8f
 
-        // 6. PIE DE PÁGINA
-        val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = regularFont
-            color = colorTextSecondary
-            textSize = 8f
+        // 6. AVISOS DE CALIDAD DE LA MEDICIÓN CUANDO APLIQUEN (Req 10 + Req 4)
+        val warnings = mutableListOf<String>()
+        if (session.belowFloorSeconds > 0.0 && measuredSec > 0.0) {
+            val pctBelow = (session.belowFloorSeconds / measuredSec) * 100.0
+            if (pctBelow >= 0.1) {
+                warnings += "• ${"%.1f".format(Locale.US, pctBelow)} % del tiempo por debajo del piso del micrófono (35 dBA): el LAeq real puede ser menor."
+            }
         }
-        val footerY = pageHeight - 18f
-        canvas.drawText(
-            "LevelApp • Sesión #${session.id} • Reporte técnico de dosimetría acústica (LAeq, SEL/LAE, LEX,8h/TWA, Percentiles L10-L90). Rango: 35–110 dB(A).",
-            margin,
-            footerY,
-            footerPaint
-        )
+        if (session.saturationSeconds > 0.0) {
+            val satMin = session.saturationSeconds / 60.0
+            warnings += "• ${"%.2f".format(Locale.US, satMin)} min por encima de 110 dBA: posible saturación del micrófono, la dosis puede estar subestimada."
+        }
+        if (session.calibrationOffset == 0.0) {
+            warnings += "• Sin calibración con sonómetro patrón (Offset = 0.0 dB)."
+        }
+        if (session.resumedNote.isNotBlank()) {
+            warnings += "• ${session.resumedNote}"
+        }
 
+        if (warnings.isNotEmpty()) {
+            val warnPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = regularFont; color = colorTextPrimary; textSize = 8.4f }
+            val warnText = warnings.joinToString("\n")
+            val warnLayout = buildStaticLayout(warnText, warnPaint, (contentWidth - 24f).toInt())
+            val warnH = warnLayout.height + 24f
+            ensureSpace(warnH)
+
+            val warnBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorAmberBg; style = Paint.Style.FILL }
+            val warnBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorAmber; style = Paint.Style.STROKE; strokeWidth = 1f }
+            val warnRect = RectF(margin, y, margin + contentWidth, y + warnH)
+            canvas.drawRoundRect(warnRect, 8f, 8f, warnBgPaint)
+            canvas.drawRoundRect(warnRect, 8f, 8f, warnBorderPaint)
+
+            val warnHdrPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = boldFont; color = colorAmber; textSize = 8.2f }
+            canvas.drawText("AVISOS DE CALIDAD DE LA MEDICIÓN", margin + 12f, y + 14f, warnHdrPaint)
+            canvas.save()
+            canvas.translate(margin + 12f, y + 19f)
+            warnLayout.draw(canvas)
+            canvas.restore()
+            y = warnRect.bottom + 6f
+        }
+
+        drawFooter()
         pdfDocument.finishPage(page)
 
         val exportDir = File(context.cacheDir, "LevelApp_Exportaciones").apply { mkdirs() }
@@ -452,6 +462,15 @@ class PdfReportExporter(private val context: Context) {
         return outputFile
     }
 
+    private fun resolveDose(session: SessionEntity, profileId: String): Double = when (profileId) {
+        "niosh" -> if (session.doseNiosh > 0.0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent
+        "osha" -> if (session.doseOsha > 0.0 || session.profileId != "osha") session.doseOsha else session.dosePercent
+        "osha_hc" -> if (session.doseOshaHc > 0.0 || session.profileId != "osha_hc") session.doseOshaHc else session.dosePercent
+        "iso9612" -> if (session.doseIso > 0.0 || session.profileId != "iso9612") session.doseIso else session.dosePercent
+        "col_res1792" -> if (session.doseColRes1792 > 0.0 || session.profileId != "col_res1792") session.doseColRes1792 else session.dosePercent
+        else -> 0.0
+    }
+
     private fun drawInlineMetric(
         canvas: Canvas,
         x: Float,
@@ -459,11 +478,13 @@ class PdfReportExporter(private val context: Context) {
         label: String,
         value: String,
         labelPaint: TextPaint,
-        valPaint: TextPaint
+        valPaint: TextPaint,
+        maxWidth: Float
     ) {
         canvas.drawText(label, x, y, labelPaint)
         val offset = labelPaint.measureText(label)
-        canvas.drawText(value, x + offset, y, valPaint)
+        val clippedVal = ellipsize(value, valPaint, (maxWidth - offset).coerceAtLeast(30f))
+        canvas.drawText(clippedVal, x + offset, y, valPaint)
     }
 
     private fun drawSignatureBox(
@@ -476,38 +497,26 @@ class PdfReportExporter(private val context: Context) {
         boldFont: Typeface,
         regularFont: Typeface
     ) {
-        canvas.drawRoundRect(rect, 8f, 8f, cardAltPaint)
-        canvas.drawRoundRect(rect, 8f, 8f, borderPaint)
+        canvas.drawRoundRect(rect, 7f, 7f, cardAltPaint)
+        canvas.drawRoundRect(rect, 7f, 7f, borderPaint)
 
-        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colorTextSecondary
-            strokeWidth = 1f
-        }
-        val lineY = rect.top + 38f
-        canvas.drawLine(rect.left + 10f, lineY, rect.right - 10f, lineY, linePaint)
+        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colorTextSecondary; strokeWidth = 0.9f }
+        val lineY = rect.top + 30f
+        canvas.drawLine(rect.left + 8f, lineY, rect.right - 8f, lineY, linePaint)
 
-        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = boldFont
-            color = colorTextPrimary
-            textSize = 8.5f
-        }
-        val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = regularFont
-            color = colorTextSecondary
-            textSize = 7.8f
-        }
-        val maxTextW = rect.width() - 18f
-        canvas.drawText(ellipsize(title, titlePaint, maxTextW), rect.left + 9f, lineY + 13f, titlePaint)
-        canvas.drawText(ellipsize(subtitle, subPaint, maxTextW), rect.left + 9f, lineY + 25f, subPaint)
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = boldFont; color = colorTextPrimary; textSize = 8f }
+        val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = regularFont; color = colorTextSecondary; textSize = 7.4f }
+        val maxTextW = rect.width() - 16f
+        canvas.drawText(ellipsize(title, titlePaint, maxTextW), rect.left + 8f, lineY + 11f, titlePaint)
+        canvas.drawText(ellipsize(subtitle, subPaint, maxTextW), rect.left + 8f, lineY + 21f, subPaint)
     }
 
-    private fun buildStaticLayout(text: String, paint: TextPaint, width: Int): StaticLayout {
-        return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.coerceAtLeast(40))
+    private fun buildStaticLayout(text: String, paint: TextPaint, width: Int): StaticLayout =
+        StaticLayout.Builder.obtain(text, 0, text.length, paint, width.coerceAtLeast(40))
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-            .setLineSpacing(2f, 1.05f)
+            .setLineSpacing(1.5f, 1.05f)
             .setIncludePad(false)
             .build()
-    }
 
     private fun ellipsize(text: String, paint: TextPaint, maxWidth: Float): String {
         if (paint.measureText(text) <= maxWidth) return text

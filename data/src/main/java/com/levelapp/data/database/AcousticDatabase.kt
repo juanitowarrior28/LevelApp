@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SessionEntity::class, MeasurementPointEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AcousticDatabase : RoomDatabase() {
@@ -49,6 +49,20 @@ abstract class AcousticDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE sessions ADD COLUMN doseColRes1792 REAL NOT NULL DEFAULT 0.0")
                 db.execSQL("ALTER TABLE measurement_points ADD COLUMN doseOshaHc REAL NOT NULL DEFAULT 0.0")
                 db.execSQL("ALTER TABLE measurement_points ADD COLUMN doseColRes1792 REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sessions ADD COLUMN lex8h REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE sessions ADD COLUMN soundExposurePa2h REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE sessions ADD COLUMN belowFloorSeconds REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE sessions ADD COLUMN saturationSeconds REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE sessions ADD COLUMN pausedSeconds REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE sessions ADD COLUMN hasPauses INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE sessions ADD COLUMN resumedNote TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE sessions ADD COLUMN calibrationOffset REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE measurement_points ADD COLUMN lex8h REAL NOT NULL DEFAULT 0.0")
             }
         }
     }

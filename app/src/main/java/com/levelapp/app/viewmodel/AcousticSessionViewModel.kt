@@ -14,21 +14,31 @@ import kotlinx.coroutines.launch
 
 data class SessionUiState(
     val liveDbA: Double = 0.0,
+    val displayDbA: Double = 0.0,
     val laeq: Double = 0.0,
+    val lex8h: Double = Double.NEGATIVE_INFINITY,
     val sel: Double = 0.0,
+    val soundExposurePa2h: Double = 0.0,
     val lasMin: Double = 0.0,
     val lasMax: Double = 0.0,
     val l10: Double = 0.0,
     val l50: Double = 0.0,
     val l90: Double = 0.0,
-    val twa: Double = 0.0,
+    val twa: Double = Double.NEGATIVE_INFINITY,
     val dose: Double = 0.0,
     val doseNiosh: Double = 0.0,
     val doseOsha: Double = 0.0,
     val doseOshaHc: Double = 0.0,
     val doseIso: Double = 0.0,
     val doseColRes1792: Double = 0.0,
+    val projectedDose8h: Double = 0.0,
     val durationMinutes: Double = 0.0,
+    val measuredSeconds: Double = 0.0,
+    val belowFloorSeconds: Double = 0.0,
+    val saturationSeconds: Double = 0.0,
+    val pausedSeconds: Double = 0.0,
+    val hasPauses: Boolean = false,
+    val resumedNote: String = "",
     val status: String = "Idle",
     val savedSessionId: Long? = null,
     val lastSavedSession: SessionEntity? = null,
@@ -66,6 +76,10 @@ class AcousticSessionViewModel(
         AudioDataStream.pauseSession()
     }
 
+    fun resumeSession() {
+        AudioDataStream.resumeSession()
+    }
+
     fun finishAndSaveSession(
         workerName: String,
         workerRole: String = "",
@@ -74,11 +88,10 @@ class AcousticSessionViewModel(
         notes: String = "",
         customTitle: String? = null
     ) {
-        val finalState = uiState.value
-        val durationSec = finalState.durationMinutes * 60.0
-        val startedAt = AudioDataStream.startTimeMs.let { if (it > 0L) it else System.currentTimeMillis() }
-        val endedAt = (startedAt + (durationSec * 1000.0).toLong()).coerceAtLeast(System.currentTimeMillis())
-        val rawPoints = AudioDataStream.buildMeasurementPoints(0L, finalState.profileId)
+        val snap = AudioDataStream.currentSnapshot()
+        val startedAt = snap.startTimeMs.let { if (it > 0L) it else System.currentTimeMillis() }
+        val endedAt = snap.endedAtMs.let { if (it >= startedAt && it > 0L) it else System.currentTimeMillis() }
+        val rawPoints = AudioDataStream.buildMeasurementPoints(0L, snap.profileId)
 
         viewModelScope.launch {
             val entity = SessionEntity(
@@ -87,25 +100,33 @@ class AcousticSessionViewModel(
                 workerRole = workerRole.trim().ifEmpty { "Sin especificar" },
                 area = area.trim().ifEmpty { "Sin especificar" },
                 evaluatorName = evaluator.trim().ifEmpty { "Evaluador SST" },
-                profileId = finalState.profileId,
+                profileId = snap.profileId,
                 status = "Completada",
                 startedAtEpochMs = startedAt,
                 endedAtEpochMs = endedAt,
-                durationSeconds = durationSec,
-                laeq = finalState.laeq,
-                sel = finalState.sel,
-                lasMin = finalState.lasMin,
-                lasMax = finalState.lasMax,
-                l10 = finalState.l10,
-                l50 = finalState.l50,
-                l90 = finalState.l90,
-                twa = finalState.twa,
-                dosePercent = finalState.dose,
-                doseNiosh = finalState.doseNiosh,
-                doseOsha = finalState.doseOsha,
-                doseOshaHc = finalState.doseOshaHc,
-                doseIso = finalState.doseIso,
-                doseColRes1792 = finalState.doseColRes1792,
+                durationSeconds = snap.measuredSeconds,
+                laeq = snap.laeq,
+                lex8h = snap.lex8h,
+                sel = snap.sel,
+                soundExposurePa2h = snap.soundExposurePa2h,
+                lasMin = snap.lasMin,
+                lasMax = snap.lasMax,
+                l10 = snap.l10,
+                l50 = snap.l50,
+                l90 = snap.l90,
+                twa = if (snap.twa.isFinite()) snap.twa else 0.0,
+                dosePercent = snap.dose,
+                doseNiosh = snap.doseNiosh,
+                doseOsha = snap.doseOsha,
+                doseOshaHc = snap.doseOshaHc,
+                doseIso = snap.doseIso,
+                doseColRes1792 = snap.doseColRes1792,
+                belowFloorSeconds = snap.belowFloorSeconds,
+                saturationSeconds = snap.saturationSeconds,
+                pausedSeconds = snap.pausedSeconds,
+                hasPauses = snap.hasPauses,
+                resumedNote = snap.resumedNote,
+                calibrationOffset = snap.calibrationOffset,
                 notes = notes.trim()
             )
             val sessionId = repository.saveSession(entity)

@@ -85,6 +85,10 @@ import com.levelapp.app.R
 import com.levelapp.app.csv.CsvReportExporter
 import com.levelapp.app.pdf.PdfReportExporter
 import com.levelapp.app.viewmodel.AcousticSessionViewModel
+import com.levelapp.app.viewmodel.SessionUiState
+import com.levelapp.core.dosimetry.DoseCalculator
+import com.levelapp.core.dosimetry.RegulatoryProfile
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -98,6 +102,7 @@ val TextPrimary = Color(0xFFE2E8F0)
 val TextSecondary = Color(0xFF94A3B8)
 val PeriwinklePrimary = Color(0xFF7A7EFF)
 val PeriwinkleLight = Color(0xFF2D315E)
+val GreenSafe = Color(0xFF22C55E)
 val AmberAlert = Color(0xFFF59E0B)
 val RedAlert = Color(0xFFF44336)
 
@@ -148,6 +153,7 @@ fun AcousticSessionScreen(
     var showCalibration by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showInterpretationDialog by remember { mutableStateOf(false) }
+    var showCalibrationReminder by remember { mutableStateOf(false) }
     var hasVibrated by remember { mutableStateOf(false) }
     
     var tutorialStep by remember { mutableIntStateOf(0) }
@@ -160,6 +166,19 @@ fun AcousticSessionScreen(
             prefs.edit().putBoolean("tutorial_shown_v2", true).apply()
         }
         sessionName = "Medición_${SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(Date())}"
+    }
+
+    LaunchedEffect(showCalibrationReminder) {
+        if (showCalibrationReminder) {
+            delay(8000L)
+            showCalibrationReminder = false
+        }
+    }
+
+    LaunchedEffect(uiState.calibrationOffset) {
+        if (uiState.calibrationOffset != 0.0) {
+            showCalibrationReminder = false
+        }
     }
 
     val isRunning = uiState.status == "Running"
@@ -346,23 +365,69 @@ fun AcousticSessionScreen(
                     modifierSettings = Modifier.onGloballyPositioned { targetRects[5] = it.boundsInRoot() },
                     modifierHistory = Modifier.onGloballyPositioned { targetRects[4] = it.boundsInRoot() }
                 )
-                Spacer(Modifier.height(16.dp))
-                Box(Modifier.height(200.dp).onGloballyPositioned { targetRects[1] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
-                    SoundLevelCircle(uiState.liveDbA.toFloat(), isRunning)
+                Spacer(Modifier.height(12.dp))
+                Box(Modifier.height(190.dp).onGloballyPositioned { targetRects[1] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
+                    SoundLevelCircle(uiState.displayDbA.toFloat(), isRunning)
                 }
-                Spacer(Modifier.height(24.dp))
-                LevelHistoryGraph(Modifier.weight(1f).fillMaxWidth(), history, isRunning)
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(14.dp))
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    LevelHistoryGraph(Modifier.fillMaxSize(), history, isRunning)
+                    Column(
+                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (isRunning && uiState.liveDbA > 110.0) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF3B1518).copy(alpha = 0.94f))
+                                    .border(1.dp, RedAlert, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    "El micrófono puede estar saturado",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontFamily = BricolageGrotesque,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        if (showCalibrationReminder && uiState.calibrationOffset == 0.0) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(SurfaceCard.copy(alpha = 0.95f))
+                                    .border(1.dp, PeriwinklePrimary, RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        showCalibrationReminder = false
+                                        showCalibration = true
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    "Calibra con un sonómetro para mejorar la exactitud",
+                                    color = TextPrimary,
+                                    fontSize = 11.5.sp,
+                                    fontFamily = BricolageGrotesque,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
                 Box(Modifier.onGloballyPositioned { targetRects[2] = it.boundsInRoot() }) {
-                    DoseCard(uiState.dose.toFloat(), uiState.profileId)
+                    DoseCard(uiState = uiState, isRunning = isRunning)
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
                 Box(Modifier.onGloballyPositioned { targetRects[3] = it.boundsInRoot() }) {
                     CriteriaToggleRow(uiState.profileId) {
                         viewModel.updateCriterion(it)
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
                 
                 if (uiState.status == "Completada" && uiState.savedSessionId != null) {
                     Row(
@@ -419,19 +484,38 @@ fun AcousticSessionScreen(
                                 sessionName = "Medición_${SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault()).format(Date())}"
                                 viewModel.startSession()
                                 onStartService()
+                                if (uiState.calibrationOffset == 0.0) {
+                                    showCalibrationReminder = true
+                                }
                             }
                         ) {
                             Text("Nueva", color = TextPrimary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
                         }
                     }
                 } else if (isStopped) {
-                    Button(
-                        modifier = Modifier.fillMaxWidth().height(56.dp).onGloballyPositioned { targetRects[6] = it.boundsInRoot() },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PeriwinkleLight),
-                        onClick = { showStopDialog = true }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().onGloballyPositioned { targetRects[6] = it.boundsInRoot() },
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Guardar sesión como", color = PeriwinklePrimary, fontWeight = FontWeight.Bold)
+                        Button(
+                            modifier = Modifier.weight(1.4f).height(56.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PeriwinkleLight),
+                            onClick = { showStopDialog = true }
+                        ) {
+                            Text("Guardar sesión como", color = PeriwinklePrimary, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            modifier = Modifier.weight(0.8f).height(56.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PeriwinklePrimary),
+                            onClick = {
+                                viewModel.resumeSession()
+                                onStartService()
+                            }
+                        ) {
+                            Text("Reanudar", color = Color.White, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                        }
                     }
                 } else {
                     Box(Modifier.onGloballyPositioned { targetRects[6] = it.boundsInRoot() }) {
@@ -444,6 +528,9 @@ fun AcousticSessionScreen(
                                 } else {
                                     viewModel.startSession()
                                     onStartService()
+                                    if (uiState.calibrationOffset == 0.0) {
+                                        showCalibrationReminder = true
+                                    }
                                 }
                             }
                         )
@@ -627,9 +714,12 @@ fun LevelHistoryGraph(modifier: Modifier, levels: List<Float>, isRunning: Boolea
 
         val dbLevels = listOf(20, 40, 60, 80, 100)
         val gridColor = BorderSoft
+        val minPlotDb = 20f
+        val maxPlotDb = 110f
+        val plotSpan = maxPlotDb - minPlotDb
         
         dbLevels.forEach { db ->
-            val y = graphH - ((db - 20f) / 80f) * graphH
+            val y = graphH - ((db - minPlotDb) / plotSpan) * graphH
             drawLine(gridColor, Offset(0f, y), Offset(graphW, y), strokeWidth = 1f)
             drawText(
                 textMeasurer = textMeasurer,
@@ -651,7 +741,7 @@ fun LevelHistoryGraph(modifier: Modifier, levels: List<Float>, isRunning: Boolea
             )
         }
 
-        val y85 = graphH - ((85f - 20f) / 80f) * graphH
+        val y85 = graphH - ((85f - minPlotDb) / plotSpan) * graphH
         drawLine(
             color = AmberAlert,
             start = Offset(0f, y85),
@@ -676,8 +766,8 @@ fun LevelHistoryGraph(modifier: Modifier, levels: List<Float>, isRunning: Boolea
             val startIdx = (maxPoints - levels.size).coerceAtLeast(0)
             levels.forEachIndexed { idx, db ->
                 val x = (startIdx + idx) * step
-                val clampedDb = db.coerceIn(20f, 100f)
-                val y = graphH - ((clampedDb - 20f) / 80f) * graphH
+                val clampedDb = db.coerceIn(35f, 110f)
+                val y = graphH - ((clampedDb - minPlotDb) / plotSpan) * graphH
                 coords.add(Offset(x, y))
             }
             
@@ -716,33 +806,80 @@ fun LevelHistoryGraph(modifier: Modifier, levels: List<Float>, isRunning: Boolea
 }
 
 @Composable
-fun DoseCard(dose: Float, profileId: String) {
+fun DoseCard(uiState: SessionUiState, isRunning: Boolean) {
+    val dose = uiState.dose.toFloat()
+    val profile = RegulatoryProfile.byId(uiState.profileId)
+    val doseColor = when {
+        dose >= 100f -> RedAlert
+        dose >= 50f -> AmberAlert
+        else -> GreenSafe
+    }
+    val statusPhrase = when {
+        dose >= 100f -> "Límite superado: usa protección y reduce el tiempo de exposición"
+        dose >= 50f -> "Cerca del límite: usa protección auditiva"
+        else -> "Exposición aceptable"
+    }
+
+    val refLevel = if (isRunning && uiState.measuredSeconds > 0.0) uiState.liveDbA else uiState.laeq
+    val remText = if (uiState.measuredSeconds <= 0.0 && !isRunning) {
+        "--"
+    } else {
+        DoseCalculator.formatRemainingTimeHoursMinutes(
+            DoseCalculator.remainingTimeHours(uiState.dose, refLevel, profile)
+        )
+    }
+    val lexStr = if (uiState.measuredSeconds > 0.0 && uiState.lex8h.isFinite()) {
+        String.format(Locale.US, "%.1f dBA", uiState.lex8h)
+    } else "--"
+    val twaStr = if (uiState.measuredSeconds > 0.0) {
+        DoseCalculator.formatTwa(uiState.dose, profile)
+    } else "--"
+
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = SurfaceCard),
         border = BorderStroke(1.dp, BorderSoft)
     ) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                 Text("Dosis Acumulada", color = TextPrimary, fontSize = 14.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.SemiBold)
-                Text(com.levelapp.core.dosimetry.RegulatoryProfile.byId(profileId).name, color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(profile.name, color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(4.dp))
-            
-            val doseColor = if (dose >= 100f) RedAlert else if (dose >= 50f) AmberAlert else PeriwinklePrimary
-            
+            Spacer(Modifier.height(2.dp))
+
             Row(verticalAlignment = Alignment.Bottom) {
-                Text("%.2f".format(dose), color = doseColor, fontSize = 32.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
-                Text("%", color = doseColor, fontSize = 16.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+                Text("%.2f".format(dose), color = PeriwinklePrimary, fontSize = 30.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold)
+                Text("%", color = PeriwinklePrimary, fontSize = 15.sp, fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             LinearProgressIndicator(
                 progress = { (dose / 100f).coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                 color = doseColor,
                 trackColor = DarkBg,
                 strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = statusPhrase,
+                color = doseColor,
+                fontSize = 12.5.sp,
+                fontFamily = BricolageGrotesque,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Tiempo restante hasta 100%: $remText",
+                color = TextSecondary,
+                fontSize = 11.5.sp,
+                fontFamily = BricolageGrotesque
+            )
+            Text(
+                text = "L_EX,8h: $lexStr  •  TWA: $twaStr",
+                color = TextSecondary,
+                fontSize = 11.sp,
+                fontFamily = BricolageGrotesque
             )
         }
     }
@@ -889,6 +1026,9 @@ fun InterpretationDialog(onDismiss: () -> Unit) {
                         Spacer(Modifier.height(12.dp))
                         Text("• Criterio de evaluación", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
                         Text("Una dosis del 100% equivale a haber estado expuesto al límite máximo permitido para una jornada de 8 horas (que habitualmente es de 85 dBA, según la normativa local). Si el dosímetro marca más del 100%, significa que se ha superado el límite seguro y hay riesgo de hipoacusia (pérdida de audición).", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text("• L_EX,8h y TWA (métricas separadas)", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
+                        Text("• L_EX,8h (ISO 9612): Nivel diario normalizado a 8 h calculado únicamente por energía acústica (sin umbral), igual para todos los criterios.\n• TWA: Promedio ponderado propio del criterio elegido calculado a partir de su dosis. Si la dosis es menor a 0.01 %, se muestra 'Bajo umbral' en lugar de un número.\n• Rango confiable del micrófono: 35–110 dB(A). La app integra el nivel real sin recortar y te avisa si hay valores fuera de este rango.", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)
                         Spacer(Modifier.height(12.dp))
                         Text("• Diferencias de Normativa y Perfiles", fontFamily = BricolageGrotesque, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 16.sp)
                         Text("Criterios seleccionables en pantalla:\n• NIOSH (REL): 85 dBA / 8 h, tasa de intercambio 3 dB, umbral 80 dBA. El más protector.\n• OSHA (PEL): 90 dBA / 8 h, tasa de intercambio 5 dB, umbral 90 dBA. Límite legal en EE. UU.\n• COLOMBIA (Res. 1792 de 1990): 85 dBA / 8 h, tasa de intercambio 5 dB, umbral 80 dBA. Límite legal en Colombia.\n\nIncluidos además en el reporte PDF/CSV:\n• OSHA HC: programa de conservación auditiva (Action Level: 50% = 85 dBA), umbral 80 dBA.\n• ISO 9612: método de cálculo del nivel diario L_EX,8h (85 dBA, 3 dB, sin umbral).", color = TextSecondary, fontFamily = BricolageGrotesque, fontSize = 14.sp)

@@ -15,7 +15,6 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.log10
 import kotlin.math.min
-import kotlin.math.pow
 
 class CsvReportExporter(private val context: Context) {
 
@@ -29,39 +28,48 @@ class CsvReportExporter(private val context: Context) {
 
         val startMs = session.startedAtEpochMs
         val endMs = session.endedAtEpochMs ?: System.currentTimeMillis()
-        val durationSec = if (session.durationSeconds > 0.0) {
+        // Duración real medida (excluye pausas)
+        val measuredSec = if (session.durationSeconds > 0.0) {
             session.durationSeconds
         } else {
             ((endMs - startMs).coerceAtLeast(1000L)) / 1000.0
         }
-        val durationHours = durationSec / 3600.0
+        val measuredHours = measuredSec / 3600.0
+        val wallSec = ((endMs - startMs).coerceAtLeast(0L)) / 1000.0
 
         val selValue = if (session.sel > 0.0) {
             session.sel
-        } else if (session.laeq > 0.0 && durationSec > 0.0) {
-            session.laeq + 10.0 * log10(durationSec)
+        } else if (session.laeq > 0.0 && measuredSec > 0.0) {
+            session.laeq + 10.0 * log10(measuredSec)
         } else 0.0
-
-        val lasMinValue = if (session.lasMin > 0.0) session.lasMin else session.laeq
-        val remainingDose = (100.0 - session.dosePercent).coerceAtLeast(0.0)
-        val projectedDose8h = if (durationHours > 1e-6) session.dosePercent * (8.0 / durationHours) else 0.0
-        val soundExposurePa2h = 4e-10 * durationHours * 10.0.pow(session.laeq / 10.0)
+        val lex8hValue = DoseCalculator.lex8h(session.laeq, measuredSec)
+        val eaPa2h = if (session.soundExposurePa2h > 0.0) {
+            session.soundExposurePa2h
+        } else {
+            DoseCalculator.soundExposurePa2hFromLaeq(session.laeq, measuredSec)
+        }
+        val eaFormatted = DoseCalculator.formatSoundExposure(eaPa2h)
 
         val profile = RegulatoryProfile.byId(session.profileId)
+        val lasMinValue = if (session.lasMin > 0.0) session.lasMin else session.laeq
+        val l10Value = if (session.l10 > 0) session.l10 else session.lasMax
+        val l50Value = if (session.l50 > 0) session.l50 else session.laeq
+        val l90Value = if (session.l90 > 0) session.l90 else lasMinValue
+        val projectedDose8h = DoseCalculator.projectedDose8hFromDose(session.dosePercent, measuredSec, profile)
+        val twaStr = DoseCalculator.formatTwa(session.dosePercent, profile)
+
         val dateFmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
         val effectivePoints = if (points.isNotEmpty()) {
             points
         } else {
-            buildFallbackProgressionPoints(session, durationSec)
+            buildFallbackProgressionPoints(session, measuredSec)
         }
 
         val avgIntervalSec = if (effectivePoints.isNotEmpty()) {
             effectivePoints.map { it.durationSeconds }.average()
-        } else {
-            1.0
-        }
+        } else 1.0
         val resolutionDescription = if (avgIntervalSec <= 1.5) {
             "Muestra por muestra cada 1 s (${effectivePoints.size} filas)"
         } else {
@@ -80,38 +88,81 @@ class CsvReportExporter(private val context: Context) {
             writer.write("Fecha de medicion,${dateFmt.format(Date(startMs))},DD/MM/AAAA\n")
             writer.write("Hora de inicio,${timeFmt.format(Date(startMs))},HH:MM:SS\n")
             writer.write("Hora de finalizacion,${timeFmt.format(Date(endMs))},HH:MM:SS\n")
-            writer.write("Duracion efectiva,${formatHmsFull(durationSec)},${"%.2f".format(Locale.US, durationSec)} s (${"%.4f".format(Locale.US, durationHours)} h)\n")
-            writer.write("Rango dinamico del sistema,35.0 - 110.0,dB(A) (Ponderacion A IEC 61672)\n")
-            writer.write("Criterio principal,${profile.name},Criterio ${profile.criterionDbA} dBA / 8h / Tasa ${profile.exchangeRateDb} dB / Umbral ${profile.thresholdDbA} dBA\n")
-            writer.write("LAeq_T (Promedio energetico),${fmt(session.laeq)},dBA\n")
-            writer.write("SEL (LAE - Nivel de Exposicion Sonora),${fmt(selValue)},dBA (Energia ponderada A integrada a 1 s)\n")
-            writer.write("LEX_8h / TWA (Nivel diario equivalente 8h),${fmt(session.twa)},dBA\n")
-            writer.write("Exposicion sonora (EA - ISO 9612),${"%.4f".format(Locale.US, soundExposurePa2h)},Pa^2*h (1.01 Pa^2*h = 100% a 85 dBA)\n")
-            writer.write("LASmax,${fmt(session.lasMax)},dBA (Maximo registrado)\n")
-            writer.write("LASmin,${fmt(lasMinValue)},dBA (Minimo registrado)\n")
-            writer.write("Percentil L10 (Picos frecuentes),${fmt(if (session.l10 > 0) session.l10 else session.lasMax)},dBA (Superado el 10% del tiempo)\n")
-            writer.write("Percentil L50 (Mediana acustica),${fmt(if (session.l50 > 0) session.l50 else session.laeq)},dBA (Superado el 50% del tiempo)\n")
-            writer.write("Percentil L90 (Ruido de fondo),${fmt(if (session.l90 > 0) session.l90 else lasMinValue)},dBA (Superado el 90% del tiempo)\n")
-            writer.write("Dosis Acumulada (${profile.name}),${fmt(session.dosePercent)},% de la jornada de 8h\n")
-            writer.write("Porcentaje Restante de Exposicion Permitida,${fmt(remainingDose)},% disponible antes del limite del 100%\n")
-            writer.write("Dosis Proyectada a 8 horas,${fmt(projectedDose8h)},% estimado manteniendo el ritmo actual\n")
-            writer.write("Dosis bajo NIOSH REL (85 dBA / 3 dB / umbral 80 dBA),${fmt(if (session.doseNiosh > 0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent)},%\n")
-            writer.write("Dosis bajo OSHA PEL (90 dBA / 5 dB / umbral 90 dBA),${fmt(if (session.doseOsha > 0 || session.profileId != "osha") session.doseOsha else session.dosePercent)},%\n")
-            writer.write("Dosis bajo OSHA HC (90 dBA / 5 dB / umbral 80 dBA),${fmt(if (session.doseOshaHc > 0 || session.profileId != "osha_hc") session.doseOshaHc else session.dosePercent)},%\n")
-            writer.write("Dosis bajo ISO 9612 (85 dBA / 3 dB / sin umbral),${fmt(if (session.doseIso > 0 || session.profileId != "iso9612") session.doseIso else session.dosePercent)},%\n")
-            writer.write("Dosis bajo Res. 1792/1990 Colombia (85 dBA / 5 dB / umbral 80 dBA),${fmt(if (session.doseColRes1792 > 0 || session.profileId != "col_res1792") session.doseColRes1792 else session.dosePercent)},%\n")
+            writer.write("Duracion medida efectiva,${formatHmsFull(measuredSec)},${"%.2f".format(Locale.US, measuredSec)} s (${"%.4f".format(Locale.US, measuredHours)} h)\n")
+            if (session.hasPauses || (wallSec - measuredSec >= 2.0)) {
+                val pausedSec = if (session.pausedSeconds > 0.0) session.pausedSeconds else (wallSec - measuredSec).coerceAtLeast(0.0)
+                writer.write("Tiempo total transcurrido (reloj),${formatHmsFull(wallSec)},Incluye pausas/interrupciones (${formatHmsFull(pausedSec)})\n")
+            }
+            writer.write("Calibracion Offset,${fmt(session.calibrationOffset)},dB\n")
+            writer.write("Rango confiable,35.0 - 110.0,dB(A) (se integra todo el rango sin recorte)\n")
+
+            // Bloque de resultados en el orden exacto (Req 8)
+            writer.write("Criterio elegido,${profile.name},Criterio ${profile.criterionDbA} dBA / 8h / Tasa ${profile.exchangeRateDb} dB / Umbral ${profile.thresholdDbA} dBA\n")
+            writer.write("Dosis Acumulada,${fmt(session.dosePercent)},% de la jornada de 8h\n")
+            writer.write("TWA del criterio,${csvEscape(twaStr)},Calculado desde la dosis del criterio elegido\n")
+            writer.write("Proyeccion 8 h,${fmt(projectedDose8h)},% estimado manteniendo el ritmo medido\n")
+            writer.write("L_EX_8h (ISO 9612),${if (lex8hValue.isFinite()) fmt(lex8hValue) else "0.00"},dBA (por energia sin umbral)\n")
+            writer.write("LAeq_T,${fmt(session.laeq)},dBA (Promedio energetico)\n")
+            writer.write("SEL (LAE),${fmt(selValue)},dBA (Nivel de Exposicion Sonora integrado a 1 s)\n")
+            writer.write("LASmax,${fmt(session.lasMax)},dBA (Ponderacion Slow tau=1 s)\n")
+            writer.write("LASmin,${fmt(lasMinValue)},dBA (Ponderacion Slow tau=1 s)\n")
+            writer.write("Percentil L10,${fmt(l10Value)},dBA (Superado el 10% del tiempo)\n")
+            writer.write("Percentil L50,${fmt(l50Value)},dBA (Mediana - superado el 50% del tiempo)\n")
+            writer.write("Percentil L90,${fmt(l90Value)},dBA (Ruido de fondo - superado el 90% del tiempo)\n")
+            writer.write("Exposicion sonora E_A,${csvEscape(eaFormatted)},Pa^2*h (1.01 Pa^2*h = 100% a 85 dBA)\n")
             writer.write("Resolucion de la tabla temporal,${csvEscape(resolutionDescription)},Agrupacion adaptativa segun duracion\n")
             writer.write("Observaciones,${csvEscape(session.notes.ifBlank { "Sin observaciones" })},Notas del evaluador\n")
             writer.write("\n")
 
+            // Tabla comparativa de los 5 perfiles con Dosis y TWA (Req 9)
+            writer.write("COMPARATIVA DE CRITERIOS (5 PERFILES)\n")
+            writer.write("Perfil,Criterio_dBA,Tasa_Intercambio_dB,Umbral_dBA,Dosis_%,TWA\n")
+            val fiveProfiles = listOf(
+                RegulatoryProfile.nioshDefault() to resolveDose(session, "niosh"),
+                RegulatoryProfile.oshaPelDefault() to resolveDose(session, "osha"),
+                RegulatoryProfile.oshaHcDefault() to resolveDose(session, "osha_hc"),
+                RegulatoryProfile.iso9612Default() to resolveDose(session, "iso9612"),
+                RegulatoryProfile.colombiaRes1792Default() to resolveDose(session, "col_res1792"),
+            )
+            for ((prof, pct) in fiveProfiles) {
+                writer.write(
+                    "${csvEscape(prof.name)},${fmt(prof.criterionDbA)},${fmt(prof.exchangeRateDb)},${fmt(prof.thresholdDbA)},${fmt(pct)},${csvEscape(DoseCalculator.formatTwa(pct, prof))}\n"
+                )
+            }
+            writer.write("\n")
+
+            // Avisos de calidad cuando apliquen (Req 10 + Req 4)
+            val warnings = mutableListOf<String>()
+            if (session.belowFloorSeconds > 0.0 && measuredSec > 0.0) {
+                val pctBelow = (session.belowFloorSeconds / measuredSec) * 100.0
+                if (pctBelow >= 0.1) {
+                    warnings += "${"%.1f".format(Locale.US, pctBelow)} % del tiempo por debajo del piso del microfono (35 dBA): el LAeq real puede ser menor."
+                }
+            }
+            if (session.saturationSeconds > 0.0) {
+                val satMin = session.saturationSeconds / 60.0
+                warnings += "${"%.2f".format(Locale.US, satMin)} min por encima de 110 dBA: posible saturacion del microfono, la dosis puede estar subestimada."
+            }
+            if (session.calibrationOffset == 0.0) {
+                warnings += "Sin calibracion con sonometro patron"
+            }
+            if (session.resumedNote.isNotBlank()) {
+                warnings += session.resumedNote
+            }
+            if (warnings.isNotEmpty()) {
+                writer.write("AVISOS DE CALIDAD DE LA MEDICION\n")
+                warnings.forEach { w -> writer.write("${csvEscape(w)}\n") }
+                writer.write("\n")
+            }
+
             writer.write("PROGRESION TEMPORAL PASO A PASO (FILAS HACIA ABAJO SEGUN DURACION)\n")
             writer.write(
-                "Muestra_N,Rango_Tiempo,Hora,Nivel_dBA,LAeq_Acum_dBA,SEL_LAE_Acum_dBA," +
-                    "Dosis_Acum_%,Restante_%,TWA_Acum_dBA,Min_Rango_dBA,Max_Rango_dBA,SEL_LAE_Rango_dBA," +
+                "Muestra_N,Rango_Tiempo,Hora,Nivel_dBA,LAeq_Acum_dBA,L_EX8h_Acum_dBA,SEL_LAE_Acum_dBA," +
+                    "Dosis_Acum_%,TWA_Acum,Min_Rango_dBA,Max_Rango_dBA,SEL_LAE_Rango_dBA," +
                     "Dosis_NIOSH_%,Dosis_OSHA_PEL_%,Dosis_OSHA_HC_%,Dosis_ISO9612_%,Dosis_Res1792_Col_%\n"
             )
 
-            val useHoursInRange = durationSec >= 3600.0
+            val useHoursInRange = measuredSec >= 3600.0
             effectivePoints.forEachIndexed { idx, pt ->
                 val endElapsed = if (pt.elapsedSeconds > 0.0) pt.elapsedSeconds else (idx + 1) * pt.durationSeconds
                 val startElapsed = (endElapsed - pt.durationSeconds).coerceAtLeast(0.0)
@@ -128,7 +179,8 @@ class CsvReportExporter(private val context: Context) {
                 } else if (pt.laeq > 0.0 && endElapsed > 0.0) {
                     pt.laeq + 10.0 * log10(endElapsed)
                 } else 0.0
-                val remPct = (100.0 - pt.dosePercent).coerceAtLeast(0.0)
+                val cumLex = if (pt.lex8h.isFinite()) pt.lex8h else DoseCalculator.lex8h(pt.laeq, endElapsed)
+                val rowTwaStr = DoseCalculator.formatTwa(pt.dosePercent, profile)
 
                 writer.write(
                     "${idx + 1}," +
@@ -136,10 +188,10 @@ class CsvReportExporter(private val context: Context) {
                         "$clockStr," +
                         "${fmt(pt.dbA)}," +
                         "${fmt(pt.laeq)}," +
+                        "${if (cumLex.isFinite()) fmt(cumLex) else "0.00"}," +
                         "${fmt(cumSel)}," +
                         "${fmt(pt.dosePercent)}," +
-                        "${fmt(remPct)}," +
-                        "${fmt(pt.twa)}," +
+                        "${csvEscape(rowTwaStr)}," +
                         "${fmt(sliceMin)}," +
                         "${fmt(pt.lasMax)}," +
                         "${fmt(sliceSel)}," +
@@ -152,6 +204,15 @@ class CsvReportExporter(private val context: Context) {
             }
         }
         return outputFile
+    }
+
+    private fun resolveDose(session: SessionEntity, profileId: String): Double = when (profileId) {
+        "niosh" -> if (session.doseNiosh > 0.0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent
+        "osha" -> if (session.doseOsha > 0.0 || session.profileId != "osha") session.doseOsha else session.dosePercent
+        "osha_hc" -> if (session.doseOshaHc > 0.0 || session.profileId != "osha_hc") session.doseOshaHc else session.dosePercent
+        "iso9612" -> if (session.doseIso > 0.0 || session.profileId != "iso9612") session.doseIso else session.dosePercent
+        "col_res1792" -> if (session.doseColRes1792 > 0.0 || session.profileId != "col_res1792") session.doseColRes1792 else session.dosePercent
+        else -> 0.0
     }
 
     private fun buildFallbackProgressionPoints(
@@ -170,11 +231,11 @@ class CsvReportExporter(private val context: Context) {
         val profile = RegulatoryProfile.byId(session.profileId)
         val list = ArrayList<MeasurementPointEntity>(numSteps)
 
-        val totalNiosh = if (session.doseNiosh > 0.0 || session.profileId != "niosh") session.doseNiosh else session.dosePercent
-        val totalOshaPel = if (session.doseOsha > 0.0 || session.profileId != "osha") session.doseOsha else session.dosePercent
-        val totalOshaHc = if (session.doseOshaHc > 0.0 || session.profileId != "osha_hc") session.doseOshaHc else session.dosePercent
-        val totalIso = if (session.doseIso > 0.0 || session.profileId != "iso9612") session.doseIso else session.dosePercent
-        val totalCol = if (session.doseColRes1792 > 0.0 || session.profileId != "col_res1792") session.doseColRes1792 else session.dosePercent
+        val totalNiosh = resolveDose(session, "niosh")
+        val totalOshaPel = resolveDose(session, "osha")
+        val totalOshaHc = resolveDose(session, "osha_hc")
+        val totalIso = resolveDose(session, "iso9612")
+        val totalCol = resolveDose(session, "col_res1792")
         val minVal = if (session.lasMin > 0.0) session.lasMin else session.laeq
 
         for (i in 0 until numSteps) {
@@ -183,9 +244,12 @@ class CsvReportExporter(private val context: Context) {
             val dt = (endS - startS).coerceAtLeast(0.1)
             val fraction = endS / totalSec
             val cumDose = session.dosePercent * fraction
-            val cumTwa = DoseCalculator.twaFromDose(cumDose, profile).let { if (it.isFinite()) it else 0.0 }
+            val cumTwa = if (cumDose >= DoseCalculator.MIN_VALID_TWA_DOSE_PERCENT) {
+                DoseCalculator.twaFromDose(cumDose, profile)
+            } else Double.NEGATIVE_INFINITY
             val sliceSel = if (session.laeq > 0.0) session.laeq + 10.0 * log10(dt) else 0.0
             val cumSel = if (session.laeq > 0.0) session.laeq + 10.0 * log10(endS) else 0.0
+            val cumLex = DoseCalculator.lex8h(session.laeq, endS)
 
             list.add(
                 MeasurementPointEntity(
@@ -198,6 +262,7 @@ class CsvReportExporter(private val context: Context) {
                     lasMax = session.lasMax,
                     selSlice = sliceSel,
                     laeq = session.laeq,
+                    lex8h = cumLex,
                     selCumulative = cumSel,
                     twa = cumTwa,
                     dosePercent = cumDose,

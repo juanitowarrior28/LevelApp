@@ -20,16 +20,16 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.levelapp.app.MainActivity
 import com.levelapp.core.audio.AWeightingFilter
+import com.levelapp.core.audio.SlowIntegrator
 import com.levelapp.core.dosimetry.RegulatoryProfile
+import java.util.Locale
 
 /**
- * Servicio en primer plano que captura el micrófono durante toda la jornada.
- * Diseñado para funcionar 8 h+ continuas:
- *  - Hilo de audio dedicado con prioridad de audio.
- *  - Si el micrófono falla (llamada, otra app, error del driver) se recrea el AudioRecord
- *    en lugar de terminar la captura.
- *  - WakeLock parcial sin expiración corta (se libera en onDestroy).
- *  - Ningún error de captura puede tumbar la app (todo protegido con try/catch).
+ * Servicio en primer plano que captura el micrófono durante toda la jornada (8 h+).
+ * - Aplica ponderación A (IEC 61672-1) y ponderación temporal Slow (tau = 1 s) muestra a muestra.
+ * - Descarta los primeros 500 ms de arranque del hardware para suprimir picos falsos.
+ * - No recorta los niveles acústicos antes de integrar energía, dosis o histograma;
+ *   solo protege log10(0) con un piso técnico mínimo de 1e-10.
  */
 class AcousticForegroundService : Service() {
     @Volatile private var running = false
@@ -51,9 +51,6 @@ class AcousticForegroundService : Service() {
             } else 0
             ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), type)
         } catch (e: Exception) {
-            // Android no permite iniciar el micrófono desde segundo plano (p. ej. reinicio
-            // automático tras matar el proceso). La sesión queda guardada y se reanuda
-            // cuando el usuario abre la app.
             Log.w(TAG, "No se pudo iniciar en primer plano", e)
             stopSelf()
             return START_NOT_STICKY
@@ -78,7 +75,7 @@ class AcousticForegroundService : Service() {
             val pm = getSystemService(PowerManager::class.java)
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LevelApp::AcousticWakeLock").apply {
                 setReferenceCounted(false)
-                acquire(24 * 60 * 60 * 1000L) // 24 h: cubre de sobra jornadas de 8-12 h
+                acquire(24 * 60 * 60 * 1000L)
             }
         } catch (e: Exception) {
             Log.w(TAG, "WakeLock no disponible", e)
@@ -98,7 +95,7 @@ class AcousticForegroundService : Service() {
         if (am?.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true") {
             sources += MediaRecorder.AudioSource.UNPROCESSED
         }
-        sources += MediaRecorder.AudioSource.VOICE_RECOGNITION // sin AGC en la mayoría de equipos
+        sources += MediaRecorder.AudioSource.VOICE_RECOGNITION
         sources += MediaRecorder.AudioSource.MIC
 
         for (source in sources) {
@@ -130,13 +127,18 @@ class AcousticForegroundService : Service() {
                 sleepQuietly(1000)
                 continue
             }
-            // Filtro nuevo por cada (re)inicio del micrófono + descarte del arranque:
-            // los primeros ~500 ms del micrófono traen transitorios (pop / DC) que
-            // generaban el pico falso al iniciar la medición.
+
             val filter = AWeightingFilter(SAMPLE_RATE)
+            val slowIntegrator = SlowIntegrator(SAMPLE_RATE, timeConstantSeconds = 1.0)
+
             var samplesToDiscard = WARMUP_SAMPLES
+            var warmupSeedEnergy = 0.0
+            var warmupSeedCount = 0
+
             var filled = 0
             var sumSquare = 0.0
+            var blockSlowMinRms = Double.POSITIVE_INFINITY
+            var blockSlowMaxRms = 0.0
 
             try {
                 while (running) {
@@ -151,19 +153,42 @@ class AcousticForegroundService : Service() {
                         val y = filter.processSample(buffer[i].toDouble())
                         if (samplesToDiscard > 0) {
                             samplesToDiscard--
+                            // Tras asentar el filtro IIR (primeros 200 ms), promediamos la energía
+                            // de los últimos 300 ms de warm-up para pre-cargar el integrador Slow.
+                            if (samplesToDiscard < WARMUP_SEED_SAMPLES) {
+                                warmupSeedEnergy += y * y
+                                warmupSeedCount++
+                            }
+                            if (samplesToDiscard == 0 && warmupSeedCount > 0) {
+                                slowIntegrator.seedMeanSquare(warmupSeedEnergy / warmupSeedCount)
+                            }
                             continue
                         }
+
                         sumSquare += y * y
+                        val slowRms = slowIntegrator.update(y)
+                        if (slowRms < blockSlowMinRms) blockSlowMinRms = slowRms
+                        if (slowRms > blockSlowMaxRms) blockSlowMaxRms = slowRms
+
                         filled++
                         if (filled == BLOCK_SAMPLES) {
-                            val rms = Math.sqrt(sumSquare / filled) / 32768.0
-                            val db = if (rms > 1e-10) 20.0 * Math.log10(rms) + 100.0 else MIN_DB
+                            val rmsNorm = Math.sqrt(sumSquare / filled) / 32768.0
+                            val rawDb = 20.0 * Math.log10(rmsNorm.coerceAtLeast(1e-10)) + 100.0
+                            val slowMinDb = 20.0 * Math.log10((blockSlowMinRms / 32768.0).coerceAtLeast(1e-10)) + 100.0
+                            val slowMaxDb = 20.0 * Math.log10((blockSlowMaxRms / 32768.0).coerceAtLeast(1e-10)) + 100.0
+
+                            // Sin recorte: el nivel real se envía completo al motor de integración
                             AudioDataStream.onAudioBlock(
-                                db.coerceIn(MIN_DB, MAX_DB),
-                                filled.toDouble() / SAMPLE_RATE,
+                                rawDbA = rawDb,
+                                blockSeconds = filled.toDouble() / SAMPLE_RATE,
+                                slowMinDbA = slowMinDb,
+                                slowMaxDbA = slowMaxDb,
                             )
+
                             filled = 0
                             sumSquare = 0.0
+                            blockSlowMinRms = Double.POSITIVE_INFINITY
+                            blockSlowMaxRms = 0.0
                         }
                     }
 
@@ -197,10 +222,16 @@ class AcousticForegroundService : Service() {
     private fun updateNotification() {
         try {
             val state = AudioDataStream.uiState.value
-            val totalSeconds = (state.durationMinutes * 60).toLong()
-            val time = String.format("%02d:%02d:%02d", totalSeconds / 3600, (totalSeconds % 3600) / 60, totalSeconds % 60)
+            val totalSeconds = state.measuredSeconds.toLong().coerceAtLeast(0L)
+            val time = String.format(
+                Locale.getDefault(),
+                "%02d:%02d:%02d",
+                totalSeconds / 3600,
+                (totalSeconds % 3600) / 60,
+                totalSeconds % 60
+            )
             val profile = RegulatoryProfile.byId(state.profileId).name
-            val text = "Tiempo: $time · Dosis $profile: ${"%.2f".format(state.dose)}%"
+            val text = "Tiempo medido: $time · Dosis $profile: ${"%.2f".format(state.dose)}%"
             val nm = getSystemService(NotificationManager::class.java)
             nm.notify(NOTIFICATION_ID, baseBuilder().setContentTitle("LevelApp - Midiendo ruido").setContentText(text).build())
         } catch (_: Exception) { }
@@ -245,9 +276,8 @@ class AcousticForegroundService : Service() {
         const val CHANNEL_ID = "levelapp_audio_capture"
         private const val NOTIFICATION_ID = 1001
         private const val SAMPLE_RATE = AudioDataStream.SAMPLE_RATE
-        private const val BLOCK_SAMPLES = SAMPLE_RATE / 10 // bloques de 100 ms
-        private const val WARMUP_SAMPLES = SAMPLE_RATE / 2  // descarta 500 ms al arrancar el micrófono
-        private const val MIN_DB = 35.0
-        private const val MAX_DB = 110.0
+        private const val BLOCK_SAMPLES = SAMPLE_RATE / 10      // bloques de 100 ms
+        private const val WARMUP_SAMPLES = SAMPLE_RATE / 2      // descarta 500 ms al arrancar
+        private const val WARMUP_SEED_SAMPLES = (SAMPLE_RATE * 3) / 10 // últimos 300 ms para pre-cargar Slow
     }
 }
